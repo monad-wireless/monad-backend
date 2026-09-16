@@ -21,8 +21,15 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  */
 final class MimirCaptureState implements CaptureStateProvider
 {
-    /** Matches the recording rule the fleet already exports. */
-    private const QUERY = 'monad_csi:capture_active:2m';
+    /**
+     * Matches the recording rule the fleet already exports.
+     *
+     * `:10m`, not `:2m` (2026-09-16): csid 0.3.0 heartbeats every 300 s, so the
+     * two-minute series is absent three minutes in five and a node absent from
+     * the result fails open here — the arming check was inert most of the time.
+     * The ten-minute rule holds under both the 300 s and the 60 s (0.3.1) cadence.
+     */
+    private const QUERY = 'monad_csi:capture_active:10m';
 
     private const CACHE_TTL_SECONDS = 30;
 

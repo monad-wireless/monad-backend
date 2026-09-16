@@ -73,10 +73,17 @@ final class FleetMetricsReader
      * Loki ruler from csid's log lines and carry only `{host, unit}`, so the
      * filter the queries above use would return an empty vector here.
      *
+     * `:10m`, not `:2m` (2026-09-16). csid's heartbeat is 300 s on 0.3.0 and
+     * 60 s from 0.3.1; the two-minute series vanishes three minutes in every
+     * five under the former (the Loki ruler writes a staleness marker when an
+     * evaluation finds no line), and this reader then returned `null` for every
+     * node — which the website renders as "No capture reported" — for a fleet
+     * of ten capturing nodes. The ten-minute rule holds under either cadence.
+     *
      * @var array<string, string>
      */
     private const CAPTURE_QUERIES = [
-        'capture_active' => 'monad_csi:capture_active:2m',
+        'capture_active' => 'monad_csi:capture_active:10m',
         'capture_rate_hz' => 'monad_csi:capture_rate_hz:current',
     ];
 
@@ -95,7 +102,7 @@ final class FleetMetricsReader
         // `or vector(0)` because `count()` over an empty selector returns no
         // series at all, and an absent tile reads as "we do not know" when the
         // truth is a confident "none".
-        'capture_processes' => 'count(monad_csi:capture_active:2m > 0) or vector(0)',
+        'capture_processes' => 'count(monad_csi:capture_active:10m > 0) or vector(0)',
         'nodes_delivering' => 'count(monad_csi:capture_rate_hz:current > 0) or vector(0)',
         'csi_rate_hz' => 'sum(monad_csi:capture_rate_hz:current)',
         'frames_per_s' => 'sum(monad_nic:monitor_frames:rate5m)',

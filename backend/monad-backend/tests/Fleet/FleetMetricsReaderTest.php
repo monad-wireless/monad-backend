@@ -95,7 +95,7 @@ class FleetMetricsReaderTest extends TestCase
                 self::sample(['host' => 'monad01'], '68.85'),
                 self::sample(['host' => 'monad02'], '77.1'),
             ]),
-            'monad_csi:capture_active:2m' => self::vector([
+            'monad_csi:capture_active:10m' => self::vector([
                 self::sample(['host' => 'monad02'], '12'),
             ]),
             'monad_csi:capture_rate_hz:current' => self::vector([
@@ -115,7 +115,7 @@ class FleetMetricsReaderTest extends TestCase
         // nodes had a capture process up and one was delivering records.
         $snapshot = $this->reader([
             'csid_node_temp_celsius' => self::vector([self::sample(['host' => 'monad02'], '77.1')]),
-            'monad_csi:capture_active:2m' => self::vector([self::sample(['host' => 'monad02'], '12')]),
+            'monad_csi:capture_active:10m' => self::vector([self::sample(['host' => 'monad02'], '12')]),
             'monad_csi:capture_rate_hz:current' => self::vector([self::sample(['host' => 'monad02'], '0')]),
         ])->snapshot();
 
