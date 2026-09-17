@@ -25,6 +25,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
  */
 class QuestStepCompletionCrudController extends AbstractCrudController
 {
+    use StateWordFields;
+
     public static function getEntityFqcn(): string
     {
         return QuestStepCompletion::class;
@@ -52,17 +54,11 @@ class QuestStepCompletionCrudController extends AbstractCrudController
             ->formatValue(static fn ($value, $entity) => $entity->getEnrollment()?->getUser()?->getEmail() ?? '—');
         yield AssociationField::new('step')
             ->formatValue(static fn ($value, $entity) => $entity->getStep()?->getName() ?? '—');
-        yield ChoiceField::new('status')
+        yield $this->state(ChoiceField::new('status')
             ->setChoices(array_combine(
                 array_map(static fn (QuestStepCompletionStatus $s) => $s->value, QuestStepCompletionStatus::cases()),
                 QuestStepCompletionStatus::cases(),
-            ))
-            ->renderAsBadges([
-                QuestStepCompletionStatus::IN_PROGRESS->value => 'info',
-                QuestStepCompletionStatus::COMPLETED->value => 'success',
-                QuestStepCompletionStatus::FAILED->value => 'danger',
-                QuestStepCompletionStatus::SKIPPED->value => 'warning',
-            ]);
+            )));
         yield DateTimeField::new('startedAt', 'Started')->hideOnIndex();
         yield DateTimeField::new('completedAt', 'Completed');
         yield Field::new('stepData', 'Step data')->formatValue(static fn ($value) => json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE))->setFormType(JsonType::class)->onlyOnDetail();

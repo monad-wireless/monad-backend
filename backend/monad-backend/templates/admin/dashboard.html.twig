@@ -1,104 +1,122 @@
 {% extends '@EasyAdmin/page/content.html.twig' %}
-{% import 'admin/_macros.html.twig' as m %}
+{% import 'admin/_ui.html.twig' as ui %}
 
-{# Two dense tables and two recent lists. Every number answers a question an operator asks
-   mid-session; nothing here is a tile. #}
+{#
+  TODAY (IP-157 Phase 8). What needs a human, then what is running, then what just happened.
 
-{% block content_title %}Overview{% endblock %}
+  The old Overview opened with seven counts and two dense tables, which is a report rather than
+  a page you act on. The order here is the order of the questions an operator actually asks
+  standing in the building, and the totals — which change by ones over weeks — are last.
+#}
+
+{% block content_title %}Today{% endblock %}
 
 {% block main %}
-    <div class="strip">
-        <span><span class="k">Fleet</span>
-            {% if fleet.reachable %}
-                {{ fleet.scalars.nodes_reporting is defined ? fleet.scalars.nodes_reporting|round : '?' }}/{{ fleet.scalars.nodes_expected is defined ? fleet.scalars.nodes_expected|round : '?' }} reporting,
-                {{ fleet.scalars.nodes_delivering is defined ? fleet.scalars.nodes_delivering|round : '?' }} delivering CSI
-                <a href="{{ path('admin_lab_fleet') }}">vitals</a>
-            {% else %}
-                <span class="state state-warn">metrics store unreachable</span>
-            {% endif %}
-        </span>
-        <span><span class="k">Users</span>{{ counts.users }} ({{ counts.admins }} admin{{ counts.admins == 1 ? '' : 's' }})</span>
-        <span><span class="k">Quests</span>{{ counts.quests }} <a href="{{ path('admin_lab_arming') }}">arming</a></span>
-        <span><span class="k">Nodes</span>{{ counts.devices }}</span>
-        {% set placement_mismatch = placement_mismatch_count() %}
-        <span><span class="k">Placements</span>{% if placement_mismatch > 0 %}<span class="state state-bad">{{ placement_mismatch }} named, not mirrored</span>{% else %}<span class="state state-ok">mirror agrees</span>{% endif %} <a href="{{ path('admin_lab_placements') }}">board</a></span>
-        <span><span class="k">Handsets</span>{{ counts.handsets }}</span>
-        <span><span class="k">Scans</span>{{ counts.scans }}{% if counts.conflicts > 0 %}, <span class="state state-bad">{{ counts.conflicts }} conflicts (E3)</span>{% endif %}</span>
+    <div class="ui-section">
+        <h2>Needs attention</h2>
+        {{ ui.attention(attention) }}
+        {% if attention is not empty %}
+            <p class="ui-note">A line appears only while its count is above zero, so an empty list is the
+            statement that nothing is waiting, not a page that failed to load.</p>
+        {% endif %}
     </div>
 
-    <div class="card mb-3">
-        <div class="card-header">Activity</div>
-        <div class="table-responsive">
-            <table class="table table-sm table-dense mb-0">
-                <thead>
-                    <tr>
-                        <th>Window</th>
-                        <th class="num">Runs started</th>
-                        <th class="num">Completed</th>
-                        <th class="num">Abandoned</th>
-                        <th class="num">Failed</th>
-                        <th class="num">In progress</th>
-                        <th class="num">Sessions uploaded</th>
-                        <th class="num">Bytes</th>
-                        <th class="num">Without sidecar</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for label, a in activity %}
-                        <tr>
-                            <td>{{ label }}</td>
-                            <td class="num">{{ a.started }}</td>
-                            <td class="num">{{ a.completed }}</td>
-                            <td class="num">{{ a.abandoned }}</td>
-                            <td class="num">{{ a.failed }}</td>
-                            <td class="num">{{ a.in_progress }}</td>
-                            <td class="num">{{ a.sessions }}</td>
-                            <td class="num">{{ a.bytes|bytes }}</td>
-                            <td class="num {{ a.incomplete > 0 ? 'state-warn' : '' }}">{{ a.incomplete }}</td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <div class="card-body pt-2 pb-2">
-            <p class="text-muted small mb-0">
-                "Without sidecar" counts sessions whose streams landed and whose <code>metadata.json</code> never
-                arrived — an upload that stopped half way, not a session nobody ran. Sessions uploaded before
-                2026-09-04 appear once <code>app:lab-sessions:backfill</code> has run.
-            </p>
-        </div>
+    <div class="ui-section">
+        <h2>Live quests<span class="more"><a href="{{ path('admin_lab_quests') }}">All quests</a></span></h2>
+        {% set rows = [] %}
+        {% for q in live_quests %}
+            {% set counts = quest_runs[q.id] ?? {today: 0, total: 0} %}
+            {% set rows = rows|merge([{
+                href: path('admin_lab_quests_edit', {id: q.id}),
+                cells: [
+                    q.name|e,
+                    ui.state(q.audience, q.audience == 'operator' ? 'muted' : 'ok'),
+                    q.availableTo is null ? '<span class="state state-muted">never closes</span>' : ui.clock(q.availableTo),
+                    counts.today,
+                    counts.total,
+                ]
+            }]) %}
+        {% endfor %}
+        {{ ui.table(rows, [
+            {label: 'Quest', wrap: true},
+            {label: 'Audience'},
+            {label: 'Window closes'},
+            {label: 'Runs today', align: 'right'},
+            {label: 'Runs total', align: 'right'}
+        ], {empty: 'No quest is open right now. A quest becomes live when its window opens.'}) }}
     </div>
 
-    <div class="card mb-3">
-        <div class="card-header">Recent recording sessions</div>
-        <div class="table-responsive">{{ m.session_rows(recent_sessions) }}</div>
+    <div class="ui-section">
+        <h2>Last ten runs<span class="more"><a href="{{ runs_url }}">All runs</a></span></h2>
+        {% set rows = [] %}
+        {% for e in recent_enrollments %}
+            {% set rows = rows|merge([{
+                href: path('admin_enrollment', {id: e.id}),
+                cells: [
+                    ui.clock(e.createdAt),
+                    e.user ? ui.identity(e.user.name, e.user.email, path('admin_participant', {id: e.user.id})) : ui.state('account removed', 'muted'),
+                    e.quest ? e.quest.name|e : '—',
+                    e.device ? '<code>' ~ e.device.slug|e ~ '</code>' : '—',
+                    e.handset ? e.handset.displayName|e : '<span class="state state-muted">not reported</span>',
+                    e.status|state_word,
+                    e.completionReceivedAt is null ? '<span class="state state-muted">—</span>' : ui.clock(e.completionReceivedAt),
+                ]
+            }]) %}
+        {% endfor %}
+        {{ ui.table(rows, [
+            {label: 'Started'},
+            {label: 'Participant', wrap: true},
+            {label: 'Quest', wrap: true},
+            {label: 'Node'},
+            {label: 'Handset'},
+            {label: 'State'},
+            {label: 'Completed'}
+        ], {empty: 'No run yet. A row appears when someone starts a quest.'}) }}
     </div>
 
-    <div class="card mb-3">
-        <div class="card-header">Recent enrollments</div>
-        <div class="table-responsive">{{ m.enrollment_rows(recent_enrollments) }}</div>
+    <div class="ui-section">
+        <h2>This week<span class="more"><a href="{{ runs_url }}">Runs, all windows</a></span></h2>
+        {{ ui.table([[
+            '7 d',
+            week.started,
+            week.completed,
+            week.abandoned,
+            week.failed,
+            week.in_progress,
+            week.sessions,
+            week.bytes|bytes,
+            week.incomplete > 0 ? '<span class="state state-warn">' ~ week.incomplete ~ '</span>' : week.incomplete,
+        ]], [
+            {label: 'Window'},
+            {label: 'Runs started', align: 'right'},
+            {label: 'Completed', align: 'right'},
+            {label: 'Abandoned', align: 'right'},
+            {label: 'Failed', align: 'right'},
+            {label: 'In progress', align: 'right'},
+            {label: 'Sessions uploaded', align: 'right'},
+            {label: 'Bytes', align: 'right'},
+            {label: 'Without sidecar', align: 'right'}
+        ]) }}
+        <p class="ui-note">"Without sidecar" counts sessions whose streams landed and whose
+        <code>metadata.json</code> never arrived — an upload that stopped half way, not a session nobody
+        ran. Sessions uploaded before 2026-09-04 appear once <code>app:lab-sessions:backfill</code> has run.</p>
     </div>
 
-    <div class="card">
-        <div class="card-header">Recent ground-truth sessions</div>
-        <div class="table-responsive">
-            <table class="table table-sm table-dense mb-0">
-                <thead>
-                    <tr><th>Ground-truth session</th><th class="num">Scans</th><th class="num">Participants</th><th>Last scan</th></tr>
-                </thead>
-                <tbody>
-                    {% for session in recent_ground_truth %}
-                        <tr>
-                            <td><a href="{{ path('admin_lab_session', {labSessionId: session.lab_session_id}) }}"><code>{{ session.lab_session_id }}</code></a></td>
-                            <td class="num">{{ session.scans }}</td>
-                            <td class="num">{{ session.participants }}</td>
-                            <td>{{ session.last_seen ? session.last_seen|clock : '—' }}</td>
-                        </tr>
-                    {% else %}
-                        <tr><td colspan="4" class="text-muted">No ground truth yet. A session appears when its first check-in scan arrives.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+    <div class="ui-section">
+        <h2>Totals</h2>
+        {{ ui.strip([
+            {label: 'Accounts', value: counts.users},
+            {label: 'Operators', value: counts.admins},
+            {label: 'Quests', value: counts.quests},
+            {label: 'Nodes', value: counts.devices, href: path('admin_lab')},
+            {label: 'Handsets', value: counts.handsets},
+            {label: 'Scans', value: counts.scans},
+            {label: 'Fleet', value: fleet.reachable
+                ? (fleet.scalars.nodes_reporting is defined ? fleet.scalars.nodes_reporting|round : '?')
+                  ~ '/' ~ (fleet.scalars.nodes_expected is defined ? fleet.scalars.nodes_expected|round : '?') ~ ' reporting'
+                : 'metrics store unreachable',
+             state: fleet.reachable ? null : 'warn',
+             href: path('admin_lab')},
+        ]) }}
     </div>
 {% endblock %}

@@ -1,0 +1,47 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% import 'admin/_ui.html.twig' as ui %}
+
+{#
+  PARTICIPANTS — the rail entry ahead of the lane that fills it (IP-157 Phase 10).
+  Honest, not empty: it says what is not here yet and links to the two surfaces that do the job.
+#}
+
+{% block content_title %}Participants{% endblock %}
+
+{% block main %}
+    {{ ui.strip([
+        {label: 'Accounts', value: accounts},
+        {label: 'Signups', value: signups_total},
+        {label: 'Waiting on a decision', value: signups_waiting, state: signups_waiting > 0 ? 'warn' : 'muted'},
+    ]) }}
+
+    <div class="ui-section ui-prose">
+        <p>This is the shell for the Participants module and not the module. Phase 10 replaces this page
+        with one list over accounts and signups together — filtered by where a person stands in the
+        pipeline, signed up through invited, registered, first run, active — and one person page carrying
+        their runs, handsets, notifications and signup.</p>
+
+        <p>Until then the two surfaces that do the job are unchanged, and both are linked below. Nothing
+        was removed; what left was the menu entry, so this section has one door instead of two.</p>
+    </div>
+
+    <div class="ui-section">
+        <h2>Where the work is today</h2>
+        {{ ui.table([
+            {href: path('admin_people_onboarding'), cells: [
+                '<a href="' ~ path('admin_people_onboarding') ~ '">Onboarding desk</a>',
+                'Signups from /join: invite, mark invited, decline, withdraw, notes, CSV export.',
+                signups_waiting > 0 ? '<span class="state state-warn">' ~ signups_waiting ~ ' waiting</span>' : ui.state('clear', 'muted'),
+            ]},
+            {href: users_url, cells: [
+                '<a href="' ~ users_url ~ '">Accounts</a>',
+                'Every account: name, e-mail, roles, status, password reset and anonymise.',
+                accounts,
+            ]},
+        ], [
+            {label: 'Page'},
+            {label: 'What it does', wrap: true},
+            {label: '', align: 'right'}
+        ]) }}
+    </div>
+{% endblock %}

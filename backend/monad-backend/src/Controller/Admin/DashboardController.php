@@ -9,24 +9,27 @@ use App\Entity\Handset;
 use App\Entity\LabSession;
 use App\Entity\Quest;
 use App\Entity\QuestEnrollment;
-use App\Entity\QuestStepCompletion;
-use App\Entity\QuestStepSkipRecord;
 use App\Entity\User;
 use App\Fleet\FleetMetricsReader;
 use App\Quest\ArmingMatrixBuilder;
 use App\Quest\RealisedRoute;
+use App\Repository\BetaSignupRepository;
+use App\Repository\GroundTruthConflictRepository;
 use App\Repository\HandsetRepository;
 use App\Repository\LabSessionRepository;
+use App\Repository\NotificationDeliveryRepository;
 use App\Repository\QuestEnrollmentRepository;
 use App\Repository\QuestRepository;
 use App\Service\GroundTruthService;
 use App\Service\LabConfigService;
+use App\Service\MarkerService;
 use App\Service\S3Service;
 use App\Service\WalkFigureUrlSigner;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Assets;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractDashboardController;
@@ -67,6 +70,11 @@ class DashboardController extends AbstractDashboardController
         private readonly ArmingMatrixBuilder $matrix,
         private readonly WalkFigureUrlSigner $figures,
         private readonly S3Service $s3,
+        private readonly MarkerService $markers,
+        private readonly BetaSignupRepository $signups,
+        private readonly GroundTruthConflictRepository $conflicts,
+        private readonly NotificationDeliveryRepository $deliveries,
+        private readonly string $adminTimezone,
     ) {
     }
 
@@ -75,26 +83,112 @@ class DashboardController extends AbstractDashboardController
     public function index(): Response
     {
         $now = new \DateTimeImmutable();
-        $windows = [
-            '24 h' => $now->modify('-24 hours'),
-            '7 d' => $now->modify('-7 days'),
-            'all' => null,
-        ];
-        $activity = [];
-        foreach ($windows as $label => $since) {
-            $activity[$label] = $this->enrollments->activitySince($since) + $this->sessions->activitySince($since);
-        }
-
         $snapshot = $this->fleet->snapshot();
 
+        // Live quests first, because "what can someone in the building start right now" is the
+        // question the page opens with. `true` includes the operator audience: an operator
+        // reading this page is exactly who those are for.
+        $live = $this->quests->findCurrentlyAvailable(true);
+        $midnight = $now->setTime(0, 0);
+
         return $this->render('admin/dashboard.html.twig', [
-            'activity' => $activity,
-            'fleet' => $snapshot,
-            'recent_sessions' => $this->sessions->findRegister([], 10),
+            'attention' => $this->attention($now, $snapshot),
+            'live_quests' => $live,
+            'quest_runs' => $this->enrollments->countsForQuests($live, $midnight),
             'recent_enrollments' => $this->enrollments->findRecent(10),
-            'recent_ground_truth' => $this->recentLabSessions(5),
+            'week' => $this->enrollments->activitySince($now->modify('-7 days'))
+                + $this->sessions->activitySince($now->modify('-7 days')),
+            'fleet' => $snapshot,
             'counts' => $this->counts(),
+            'runs_url' => $this->generateUrl('admin_runs'),
         ]);
+    }
+
+    /**
+     * WHAT NEEDS A HUMAN, computed here rather than drawn as seven tiles.
+     *
+     * The contract, and the reason the page is worth opening: an item with a count of zero is
+     * ABSENT. A wall of green zeros trains a reader to skim, and the one row that is not zero
+     * then reads the same as the six that are. When every count is zero the list prints one
+     * sentence instead, which is a statement and not an empty box.
+     *
+     * Each item names the page that fixes it. Nothing here writes, and nothing here is derived
+     * from another item: the fleet row comes from the metrics store, the rest from Postgres,
+     * and an unreachable metrics store contributes NO row rather than a row of zeros — "not
+     * reporting" and "could not ask" are two facts and only one of them is actionable here.
+     *
+     * @param array<string, mixed> $fleet the FleetMetricsReader snapshot
+     * @return list<array{state: string, count: int|null, text: string, href: string}>
+     */
+    private function attention(\DateTimeImmutable $now, array $fleet): array
+    {
+        $items = [];
+        $add = static function (array &$items, int $count, string $state, string $text, string $href): void {
+            if ($count > 0) {
+                $items[] = ['state' => $state, 'count' => $count, 'text' => $text, 'href' => $href];
+            }
+        };
+
+        // Values a live quest names that fold to no mirrored card or node: a participant would
+        // scan a code nothing recognises.
+        $add(
+            $items,
+            count($this->markers->driftReport()['mismatch']),
+            'bad',
+            'marker values a live quest names that the placement mirror does not have',
+            $this->generateUrl('admin_lab_placements'),
+        );
+
+        $signups = $this->signups->countByStatus();
+        $add(
+            $items,
+            (int) ($signups['new'] ?? 0),
+            'warn',
+            'signups waiting on an invitation',
+            $this->generateUrl('admin_people_onboarding'),
+        );
+
+        // Streams landed, metadata.json never did: an upload that stopped half way.
+        $add(
+            $items,
+            $this->sessions->activitySince(null)['incomplete'],
+            'warn',
+            'uploaded sessions with no sidecar',
+            $this->generateUrl('admin_runs'),
+        );
+
+        $add(
+            $items,
+            $this->conflicts->countSince($now->modify('-7 days')),
+            'bad',
+            'ground-truth conflicts (E3) in the last seven days',
+            $this->generateUrl('admin_runs'),
+        );
+
+        $add(
+            $items,
+            count($this->quests->findClosingBetween($now, $now->modify('+7 days'))),
+            'warn',
+            'quests whose window closes within seven days',
+            $this->generateUrl('admin_lab_quests'),
+        );
+
+        // Only when the store answered. `reachable: false` is its own sentence on the Lab page.
+        if (($fleet['reachable'] ?? false) === true) {
+            $expected = (int) round((float) ($fleet['scalars']['nodes_expected'] ?? 0));
+            $reporting = (int) round((float) ($fleet['scalars']['nodes_reporting'] ?? 0));
+            $add($items, max(0, $expected - $reporting), 'bad', 'fleet nodes not reporting', $this->generateUrl('admin_lab'));
+        }
+
+        $add(
+            $items,
+            $this->deliveries->countFailed(),
+            'bad',
+            'notification pushes the worker could not deliver',
+            $this->generateUrl('admin_people_notifications'),
+        );
+
+        return $items;
     }
 
     // ── Runs ─────────────────────────────────────────────────────────────────────────────────
@@ -355,8 +449,31 @@ class DashboardController extends AbstractDashboardController
     {
         return Dashboard::new()
             ->setTitle('MonadCount')
-            ->setFaviconPath('/favicon.ico')
+            ->setFaviconPath('/favicon.svg')
             ->renderContentMaximized();
+    }
+
+    /**
+     * What every CRUD page inherits, so no list can disagree with a reading page (IP-157 Phase 8).
+     *
+     * THE CLOCK. `yyyy-MM-dd HH:mm:ss` in MONAD_ADMIN_TIMEZONE, the same zone and the same
+     * 24-hour shape the `clock` Twig filter prints. Before this, EasyAdmin formatted dates
+     * through the ICU default — "Sep 9, 2026, 12:04:31 PM" — beside "2026-09-09 14:04:31 CEST"
+     * two panels away, on the same instant. The zone was the worse half: the CRUD columns were
+     * the UTC host's and nothing said so.
+     *
+     * THE `⋯` MENU IS GONE. `showEntityActionsInlined()` puts the actions in the row as text;
+     * the dropdown hid one click behind another and was the tour's first complaint.
+     *
+     * Fifty rows, because these lists are read by scrolling and not by paging.
+     */
+    public function configureCrud(): Crud
+    {
+        return Crud::new()
+            ->setDateTimeFormat('yyyy-MM-dd HH:mm:ss')
+            ->setTimezone($this->adminTimezone)
+            ->setPaginatorPageSize(50)
+            ->showEntityActionsInlined();
     }
 
     public function configureAssets(): Assets
@@ -366,6 +483,7 @@ class DashboardController extends AbstractDashboardController
         // named in each file's header; registering them here means a lane adds rules, not wiring.
         return Assets::new()
             ->addCssFile('admin.css')
+            ->addJsFile('admin-ui.js')
             ->addCssFile('admin-quests.css')
             ->addCssFile('admin-placements.css')
             ->addCssFile('admin-notifications.css')
@@ -377,42 +495,31 @@ class DashboardController extends AbstractDashboardController
     }
 
     /**
-     * Four sections (IP-157): what the lab IS (Lab), what it RECORDED (Runs), WHO takes part
-     * (People), and the system. The Quest CRUD and the Quest steps CRUD left the menu: the builder
-     * owns quest authoring and the CRUD index is still reachable from the analytics pages. The scan
-     * marker page left too; the placement board replaces it and keeps its print sheet.
+     * SEVEN ENTRIES, BY JOB, NO SECTIONS (IP-157, revision 2026-09-17).
+     *
+     * Twenty-two entries in four sections was the tour's second complaint, and the reason was
+     * not the count: fifteen of them were a table of one entity each, which is a description of
+     * the schema rather than of anything an operator does. These seven are the jobs — see who
+     * needs attention (Today), onboard and manage people (Participants), author and run scripts
+     * (Quests), read what was recorded (Runs), tell participants something (Notifications),
+     * check the instrument (Lab), and the two facts about the interface itself (Settings).
+     *
+     * Nothing was deleted. Every page that left this list is still routable and is linked from
+     * the entry that owns it: the six lab pages from Lab, the seven run registers from Runs,
+     * the user CRUD from Settings and from Participants, the onboarding desk from Participants.
+     * A route that only a menu entry reached would have become unreachable; none did.
+     *
+     * API docs and Sign out are in the user menu, where an account's own actions belong.
      */
     public function configureMenuItems(): iterable
     {
-        yield MenuItem::linkToDashboard('Overview', 'fa fa-gauge');
-
-        yield MenuItem::section('Lab');
-        yield MenuItem::linkToRoute('Quests', 'fa fa-flag', 'admin_lab_quests');
-        yield MenuItem::linkToRoute('Placement board', 'fa fa-map-location-dot', 'admin_lab_placements');
-        yield MenuItem::linkToRoute('Arming matrix', 'fa fa-table-cells', 'admin_lab_arming');
-        yield MenuItem::linkToRoute('Fleet vitals', 'fa fa-heart-pulse', 'admin_lab_fleet');
-        yield MenuItem::linkToCrud('Devices (fleet)', 'fa fa-microchip', Device::class);
-        yield MenuItem::linkToRoute('Lab bundle', 'fa fa-sliders', 'admin_lab_bundle');
-
-        yield MenuItem::section('Runs');
-        yield MenuItem::linkToCrud('Recording sessions', 'fa fa-folder-open', LabSession::class);
-        yield MenuItem::linkToCrud('Enrollments', 'fa fa-user-check', QuestEnrollment::class);
-        yield MenuItem::linkToCrud('Handsets', 'fa fa-mobile-screen', Handset::class);
-        yield MenuItem::linkToRoute('Quest analytics', 'fa fa-chart-simple', 'admin_quests_analytics');
-        yield MenuItem::linkToRoute('Ground truth', 'fa fa-satellite-dish', 'admin_lab_sessions');
-        yield MenuItem::linkToCrud('Ground-truth scans', 'fa fa-qrcode', GroundTruthScan::class);
-        yield MenuItem::linkToCrud('Scan conflicts (E3)', 'fa fa-triangle-exclamation', GroundTruthConflict::class);
-        yield MenuItem::linkToCrud('Step completions', 'fa fa-circle-check', QuestStepCompletion::class);
-        yield MenuItem::linkToCrud('Skip records', 'fa fa-forward', QuestStepSkipRecord::class);
-
-        yield MenuItem::section('People');
-        yield MenuItem::linkToCrud('Participants', 'fa fa-user', User::class);
-        yield MenuItem::linkToRoute('Onboarding desk', 'fa fa-door-open', 'admin_people_onboarding');
-        yield MenuItem::linkToRoute('Notifications', 'fa fa-bell', 'admin_people_notifications');
-
-        yield MenuItem::section('System');
-        yield MenuItem::linkToUrl('API docs', 'fa fa-book', '/api/doc');
-        yield MenuItem::linkToLogout('Sign out', 'fa fa-right-from-bracket');
+        yield MenuItem::linkToDashboard('Today');
+        yield MenuItem::linkToRoute('Participants', '', 'admin_people');
+        yield MenuItem::linkToRoute('Quests', '', 'admin_lab_quests');
+        yield MenuItem::linkToRoute('Runs', '', 'admin_runs');
+        yield MenuItem::linkToRoute('Notifications', '', 'admin_people_notifications');
+        yield MenuItem::linkToRoute('Lab', '', 'admin_lab');
+        yield MenuItem::linkToRoute('Settings', '', 'admin_settings');
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────

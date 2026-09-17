@@ -37,6 +37,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Filter\TextFilter;
  */
 class LabSessionCrudController extends AbstractCrudController
 {
+    use StateWordFields;
+
     public static function getEntityFqcn(): string
     {
         return LabSession::class;
@@ -100,8 +102,7 @@ class LabSessionCrudController extends AbstractCrudController
             ->formatValue(static fn ($v, LabSession $s) => self::bytes($s->getArtefactBytes()));
         yield Field::new('durationSeconds', 'Duration')
             ->formatValue(static fn ($v, LabSession $s) => self::duration($s->getDurationSeconds()));
-        yield BooleanField::new('complete', 'Complete')->renderAsSwitch(false)
-            ->formatValue(static fn ($v, LabSession $s) => $s->isComplete());
+        yield $this->state(BooleanField::new('complete', 'Complete')->renderAsSwitch(false), 'complete', 'no sidecar');
         yield TextField::new('interruptedReason', 'Interrupted')
             ->formatValue(static fn ($v, LabSession $s) => $s->getInterruptedReason() ?? '');
     }

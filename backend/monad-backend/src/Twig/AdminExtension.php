@@ -2,8 +2,10 @@
 
 namespace App\Twig;
 
+use App\Admin\StateWord;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFilter;
+use Twig\TwigFunction;
 
 /**
  * The three formatters every admin page needs, and the rule behind the first one.
@@ -37,7 +39,40 @@ final class AdminExtension extends AbstractExtension
             new TwigFilter('bytes', [$this, 'bytes']),
             new TwigFilter('duration', [$this, 'duration']),
             new TwigFilter('short_id', [$this, 'shortId']),
+            new TwigFilter('state_word', [$this, 'stateWord'], ['is_safe' => ['html']]),
         ];
+    }
+
+    /**
+     * An enum, a boolean or a status string as a state word in one of three hues.
+     *
+     * The same vocabulary the CRUD lists use (`App\Admin\StateWord`, reached from the field
+     * definitions through `StateWordFields`), so a status reads identically whether the reader
+     * is on a bespoke page or on an EasyAdmin index. Marked html-safe because StateWord escapes
+     * the word itself and nothing else in the string comes from data.
+     */
+    public function stateWord(mixed $value, ?string $whenTrue = null, ?string $whenFalse = null): string
+    {
+        return StateWord::render($value, $whenTrue, $whenFalse);
+    }
+
+    public function getFunctions(): array
+    {
+        return [
+            new TwigFunction('admin_timezone', [$this, 'timezoneName']),
+        ];
+    }
+
+    /**
+     * The zone every clock on this interface is printed in.
+     *
+     * The shell states it once in the rail and Settings prints it as a fact, so a reader never
+     * has to infer the zone from an abbreviation. Same value the `clock` filter converts to,
+     * from the same object, because two sources would eventually disagree.
+     */
+    public function timezoneName(): string
+    {
+        return $this->zone->getName();
     }
 
     /** `2026-09-04 12:05:31 CEST`, or an em dash for nothing. */

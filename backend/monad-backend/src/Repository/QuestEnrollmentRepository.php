@@ -400,6 +400,44 @@ class QuestEnrollmentRepository extends ServiceEntityRepository
     }
 
     /**
+     * Runs per quest: the total, and the ones that started since an instant.
+     *
+     * One grouped query for the whole list rather than two per quest, because the Today page
+     * asks about every live quest at once and a per-quest loop is where an overview page starts
+     * costing more than the thing it summarises.
+     *
+     * @param list<Quest> $quests
+     * @return array<string, array{today: int, total: int}> keyed by the quest's RFC 4122 id
+     */
+    public function countsForQuests(array $quests, \DateTimeImmutable $since): array
+    {
+        $out = [];
+        foreach ($quests as $quest) {
+            $out[(string) $quest->getId()] = ['today' => 0, 'total' => 0];
+        }
+        if ($quests === []) {
+            return $out;
+        }
+
+        $rows = $this->createQueryBuilder('e')
+            ->select('IDENTITY(e.quest) AS quest_id, COUNT(e.id) AS total,
+                      SUM(CASE WHEN e.createdAt >= :since THEN 1 ELSE 0 END) AS today')
+            ->andWhere('e.quest IN (:quests)')->setParameter('quests', $quests)
+            ->setParameter('since', $since)
+            ->groupBy('e.quest')
+            ->getQuery()->getArrayResult();
+
+        foreach ($rows as $row) {
+            $key = (string) $row['quest_id'];
+            if (array_key_exists($key, $out)) {
+                $out[$key] = ['today' => (int) $row['today'], 'total' => (int) $row['total']];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * Everything the quest-analytics page prints for one quest.
      *
      * Durations are wall-clock from the enrollment's creation to its `completed_at`, for

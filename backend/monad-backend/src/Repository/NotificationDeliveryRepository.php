@@ -20,6 +20,21 @@ class NotificationDeliveryRepository extends ServiceEntityRepository
     }
 
     /**
+     * Deliveries the push worker reported as FAILED.
+     *
+     * `skipped` is not counted and never will be: no token, no OS permission and an opt-in
+     * that is off are decisions, not failures, and folding them together would put a permanent
+     * non-zero on the Today page that nobody could ever clear.
+     */
+    public function countFailed(): int
+    {
+        return (int) $this->createQueryBuilder('d')
+            ->select('COUNT(d.id)')
+            ->andWhere('d.pushStatus = :failed')->setParameter('failed', PushStatus::FAILED)
+            ->getQuery()->getSingleScalarResult();
+    }
+
+    /**
      * One user's inbox: sent, unexpired notifications, newest first, optionally only those sent
      * after an instant (the app's `?after=` cursor).
      *

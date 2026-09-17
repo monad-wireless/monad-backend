@@ -3,7 +3,18 @@ framework:
     secret: '%env(APP_SECRET)%'
 
     # Note that the session will be started ONLY if you read or write from it.
-    session: true
+    #
+    # IP-157, revision 2026-09-17 — /admin is published over public HTTPS, so the session cookie
+    # that IS the operator's credential now travels the Internet. `auto` sets Secure whenever the
+    # request is https, which the trusted X-Forwarded-Proto above makes true behind nginx and
+    # false on the dev server, so one setting is correct in both places without a per-environment
+    # branch. `httponly` keeps the cookie out of `document.cookie`, and `lax` keeps it off
+    # cross-site POSTs — the CSRF token on the login form is the other half of that, not a
+    # substitute for it.
+    session:
+        cookie_secure: auto
+        cookie_httponly: true
+        cookie_samesite: lax
 
     # IP-157 — /join is served as monad.dubec.dev/join through the site's nginx, which forwards
     # `Host: monad.dubec.dev` and `X-Forwarded-Proto: https`. Without trusting the proxy the

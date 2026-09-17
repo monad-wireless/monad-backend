@@ -37,6 +37,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 class UserCrudController extends AbstractCrudController
 {
+    use StateWordFields;
+
     public function __construct(
         private readonly UserPasswordHasherInterface $passwordHasher,
         private readonly AdminUrlGenerator $adminUrlGenerator,
@@ -87,26 +89,20 @@ class UserCrudController extends AbstractCrudController
         // Bound to assignedRoles, NOT to roles. getRoles() is the security contract and appends the
         // implicit ROLE_USER on every read, so a field bound to it showed a tick nobody had set and
         // could not persist the absence of one. assignedRoles is the stored array and round-trips.
-        yield ChoiceField::new('assignedRoles', 'Roles')
+        yield $this->state(ChoiceField::new('assignedRoles', 'Roles')
             ->setChoices(array_combine(
                 array_map(static fn (UserRole $r) => $r->name, UserRole::cases()),
                 array_map(static fn (UserRole $r) => $r->value, UserRole::cases()),
             ))
             ->allowMultipleChoices()
             ->renderExpanded()
-            ->setHelp('ROLE_USER is implicit and does not need to be ticked. ROLE_SUPERADMIN grants full access to this management interface.');
+            ->setHelp('ROLE_USER is implicit and does not need to be ticked. ROLE_SUPERADMIN grants full access to this management interface.'));
 
-        yield ChoiceField::new('status')
+        yield $this->state(ChoiceField::new('status')
             ->setChoices(array_combine(
                 array_map(static fn (UserStatus $s) => ucfirst($s->value), UserStatus::cases()),
                 UserStatus::cases(),
-            ))
-            ->renderAsBadges([
-                UserStatus::ACTIVE->value => 'success',
-                UserStatus::INACTIVE->value => 'warning',
-                UserStatus::BANNED->value => 'danger',
-                UserStatus::DELETED->value => 'dark',
-            ]);
+            )));
 
         // UNMAPPED, which is the whole trick. The entity's password carries #[Assert\NotBlank],
         // so a mapped field would bind an empty edit form onto the entity and fail validation

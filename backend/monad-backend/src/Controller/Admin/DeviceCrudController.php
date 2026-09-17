@@ -32,6 +32,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
  */
 class DeviceCrudController extends AbstractCrudController
 {
+    use StateWordFields;
+
     public static function getEntityFqcn(): string
     {
         return Device::class;
@@ -79,8 +81,7 @@ class DeviceCrudController extends AbstractCrudController
             ->setLabel('Site ref')
             ->setHelp('Matches the vocabulary already used in step configs, e.g. fiit/library.');
 
-        yield BooleanField::new('isActive')
-            ->setLabel('In service');
+        yield $this->state(BooleanField::new('isActive')->setLabel('In service'), 'in service', 'retired');
 
         yield TextareaField::new('publicBlurb')
             ->setLabel('Public blurb')

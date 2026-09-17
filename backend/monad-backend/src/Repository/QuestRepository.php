@@ -59,6 +59,25 @@ class QuestRepository extends ServiceEntityRepository
     }
 
     /**
+     * Quests whose window CLOSES inside `[from, to]`.
+     *
+     * A quest with no `availableTo` never closes and is correctly absent — that is the common
+     * case and it is not a warning. This is a deadline, not a state: the Today page shows it so
+     * a window is extended before it lapses rather than after someone notices no runs arrived.
+     *
+     * @return Quest[]
+     */
+    public function findClosingBetween(\DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        return $this->createQueryBuilder('q')
+            ->andWhere('q.availableTo IS NOT NULL')
+            ->andWhere('q.availableTo >= :from')->setParameter('from', $from)
+            ->andWhere('q.availableTo <= :to')->setParameter('to', $to)
+            ->orderBy('q.availableTo', 'ASC')
+            ->getQuery()->getResult();
+    }
+
+    /**
      * Find quests created by a specific user
      *
      * @param string $userId

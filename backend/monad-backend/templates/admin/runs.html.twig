@@ -1,0 +1,70 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% import 'admin/_ui.html.twig' as ui %}
+
+{#
+  RUNS — the rail entry ahead of the lane that fills it (IP-157 Phase 9).
+  Nine menu entries became one. Every page they pointed at is listed here and still routable.
+#}
+
+{% block content_title %}Runs{% endblock %}
+
+{% block main %}
+    {{ ui.strip([
+        {label: 'Runs', value: runs_total},
+        {label: 'Recording sessions', value: sessions_total},
+    ]) }}
+
+    <div class="ui-section ui-prose">
+        <p>This is the shell for the Runs module and not the module. Phase 9 makes the enrollment the
+        record: one list with filters over state, quest, participant, date and platform, one run page that
+        folds in its recording sessions, handset snapshot, ground-truth scans and skips, and a data-quality
+        tab for uploads with no sidecar, sessions with no enrollment, E3 conflicts and failed pushes.</p>
+
+        <p>Nine entries used to sit in the menu here, seven of them a raw table of one entity. They are
+        listed below instead, marked for what they are — a reading page is designed for a question, a
+        register is the table as it is stored — so nobody mistakes the second for the first.</p>
+    </div>
+
+    <div class="ui-section">
+        <h2>Last ten runs</h2>
+        {% set rows = [] %}
+        {% for e in recent %}
+            {% set rows = rows|merge([{
+                href: path('admin_enrollment', {id: e.id}),
+                cells: [
+                    ui.clock(e.createdAt),
+                    e.user ? ui.identity(e.user.name, e.user.email, path('admin_participant', {id: e.user.id})) : ui.state('account removed', 'muted'),
+                    e.quest ? e.quest.name|e : '—',
+                    e.device ? '<code>' ~ e.device.slug|e ~ '</code>' : '—',
+                    e.status|state_word,
+                    e.completionReceivedAt is null ? '<span class="state state-muted">—</span>' : ui.clock(e.completionReceivedAt),
+                ]
+            }]) %}
+        {% endfor %}
+        {{ ui.table(rows, [
+            {label: 'Started'},
+            {label: 'Participant', wrap: true},
+            {label: 'Quest', wrap: true},
+            {label: 'Node'},
+            {label: 'State'},
+            {label: 'Completed'}
+        ], {empty: 'No run yet. A row appears when someone starts a quest.'}) }}
+    </div>
+
+    <div class="ui-section">
+        <h2>Everything this section will absorb</h2>
+        {{ ui.table([
+            {href: enrollments_url, cells: ['<a href="' ~ enrollments_url ~ '">Enrollments</a>', ui.state('register', 'muted'), 'One row per run. Status and device are editable; nothing else is.']},
+            {href: sessions_url, cells: ['<a href="' ~ sessions_url ~ '">Recording sessions</a>', ui.state('register', 'muted'), 'One row per session the app uploaded. Written by the upload path, never by a form.']},
+            {href: path('admin_lab_sessions'), cells: ['<a href="' ~ path('admin_lab_sessions') ~ '">Ground truth</a>', ui.state('reading page', 'ok'), 'Sessions that produced scans, with their live tally and their E3 conflicts.']},
+            {href: path('admin_quests_analytics'), cells: ['<a href="' ~ path('admin_quests_analytics') ~ '">Quest analytics</a>', ui.state('reading page', 'ok'), 'Funnel, duration quantiles, skip reasons and failing steps, per quest and per node.']},
+        ], [
+            {label: 'Page'},
+            {label: 'Kind'},
+            {label: 'What it holds', wrap: true}
+        ]) }}
+        <p class="ui-note">Handsets, ground-truth scans, scan conflicts, step completions and skip records
+        are reached from the run and session pages that name them, which is where they mean something. Their
+        own registers are still routable; they stopped being a menu entry.</p>
+    </div>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% import 'admin/_ui.html.twig' as ui %}
+
+{#
+  SETTINGS (IP-157 Phase 8): who can open this interface, and the facts that change how it reads.
+#}
+
+{% block content_title %}Settings{% endblock %}
+
+{% block main %}
+    <div class="ui-section">
+        <h2>Operator accounts</h2>
+        {% set rows = [] %}
+        {% for row in operators %}
+            {% set rows = rows|merge([{
+                href: row.edit_url,
+                cells: [
+                    ui.identity(row.user.name, row.user.email),
+                    row.user.status|state_word,
+                    ui.clock(row.user.createdAt),
+                    '<a href="' ~ row.edit_url ~ '">Edit</a>',
+                ]
+            }]) %}
+        {% endfor %}
+        {{ ui.table(rows, [
+            {label: 'Operator', wrap: true},
+            {label: 'Status'},
+            {label: 'Created'},
+            {label: '', align: 'right'}
+        ], {empty: 'No operator account. Nobody could have opened this page, so this is a bug rather than a state.'}) }}
+        <p class="ui-note">An account gains <code>ROLE_SUPERADMIN</code> from the console only —
+        <code>docker exec -it monad_api php bin/console app:user:create you@stuba.sk --admin</code>. There is
+        no button here because a screen that could grant this role would be a privilege-escalation surface,
+        and one served over public HTTPS would be a published one. Editing an existing account, including
+        its roles, is the user form behind the same session.</p>
+    </div>
+
+    <div class="ui-section">
+        <h2>This interface</h2>
+        {{ ui.kv({
+            'Time zone': '<code>' ~ timezone|e ~ '</code>',
+            'Clock format': 'Every timestamp is the stored instant converted to that zone, 24 hour, with the zone abbreviation beside it. Nothing on this interface prints a host clock.',
+            'Rows per list': 50,
+            'API documentation': '<a href="/api/doc" target="_blank" rel="noopener">/api/doc</a>',
+        }) }}
+    </div>
+{% endblock %}

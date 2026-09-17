@@ -24,6 +24,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
  */
 class GroundTruthScanCrudController extends AbstractCrudController
 {
+    use StateWordFields;
+
     public static function getEntityFqcn(): string
     {
         return GroundTruthScan::class;
@@ -54,9 +56,7 @@ class GroundTruthScanCrudController extends AbstractCrudController
         // joined to an account. Shown because an operator needs to see repeat scans, not identity.
         yield TextField::new('participantToken', 'Participant token');
         yield TextField::new('zoneId', 'Zone');
-        yield TextField::new('direction')->formatValue(
-            static fn ($value, $entity) => $entity->getDirection()->value
-        );
+        yield $this->state(TextField::new('direction'));
         yield TextField::new('site')->hideOnIndex();
         yield TextField::new('monoNs', 'mono_ns')->hideOnIndex();
         yield TextField::new('wallMs', 'wall_ms')->hideOnIndex();

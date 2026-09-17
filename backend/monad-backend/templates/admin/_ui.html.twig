@@ -1,0 +1,250 @@
+{#
+ ═══════════════════════════════════════════════════════════════════════════════════════════
+  THE ADMIN UI CONTRACT (IP-157 Phase 8)
+ ═══════════════════════════════════════════════════════════════════════════════════════════
+
+  Every page under /admin builds from these twelve macros. Later lanes (Runs, Participants,
+  Quests, Lab) build their pages out of THESE and add none of their own: a page that needs a
+  thirteenth shape changes this file, so the interface stays one system rather than five.
+
+  Import at the top of a template:
+
+      {% import 'admin/_ui.html.twig' as ui %}
+
+  ── THE HTML RULE ──────────────────────────────────────────────────────────────────────────
+  Macros that take a *value* (a table cell, a strip value, a kv value) print it RAW, because
+  the value is normally the output of another macro here — `ui.state(…)`, `ui.identity(…)`,
+  `ui.id(…)`. The caller is therefore responsible for escaping anything that came from a user
+  or a device: pipe it through `|e` before handing it over. Macros that take a *label* (a
+  column heading, a tab name, an action label) escape it themselves.
+
+  ── WHY THERE IS BOTH `table` AND `table_start`/`table_end` ─────────────────────────────────
+  Twig has no slots: a macro cannot wrap a block of markup the caller writes. So there are two
+  patterns and the choice is mechanical:
+
+    · `table(rows, columns, options)` — the rows exist as data. One call, nothing to close.
+      This is the common case and the one to reach for.
+    · `table_start(columns, options)` … your own `<tr>`s … `table_end()` — the body needs Twig
+      control flow the row list cannot express (nested loops, per-row `{% if %}` over several
+      cells, a colspanned sub-row). The header, the borders and the sticky behaviour still come
+      from here; only the `<tbody>` contents are yours. Use `ui.cells(...)` to keep cell classes
+      consistent, or write `<td class="num">` by hand — both are the same CSS.
+
+ ═══════════════════════════════════════════════════════════════════════════════════════════
+  SIGNATURES
+ ═══════════════════════════════════════════════════════════════════════════════════════════
+
+  page_header(title, subtitle = null, actions = [])
+      A heading inside the content column, for a SECTION of a page. The page's own title and
+      its actions belong in the top bar — set them with `{% block content_title %}` and
+      `{% block page_actions %}`, which the shell renders there.
+      actions: list of {label, href, method: 'get'|'post', kind: 'primary'|'default'|'danger',
+                        csrf: token, confirm: 'text'}
+      `method: 'post'` renders a one-button form; pass `csrf` when the route checks one.
+      ex: {{ ui.page_header('Signups', '1 waiting on an invitation', [
+             {label: 'Export CSV', href: path('admin_people_onboarding_export')},
+             {label: 'Add participant', href: '#', kind: 'primary'}]) }}
+
+  tabs(items, active)
+      items: list of {label, href, count: int|null}. `active` is matched against `label`.
+      ex: {{ ui.tabs([{label: 'Fleet', href: a}, {label: 'Markers', href: b, count: 35}], 'Fleet') }}
+
+  strip(items)
+      The one-line fact strip under a title. items: list of {label, value, href, state}.
+      `value` is raw. `state` in ok|warn|bad|muted colours the value; omit it for plain ink.
+      ex: {{ ui.strip([{label: 'Nodes', value: 12}, {label: 'Scans', value: 0, state: 'muted'}]) }}
+
+  attention(items)
+      The Today list. items: list of {state, text, href, count: int|null}, already filtered by
+      the controller: an item with nothing to do is ABSENT, never a zero. An empty list prints
+      one sentence. `state` in ok|warn|bad|muted carries the hue on the left bar.
+      ex: {{ ui.attention([{state: 'bad', count: 3, text: 'placement mismatches',
+                            href: path('admin_lab_placements')}]) }}
+
+  table(rows, columns, options = {})
+      columns: list of {label, align: 'right'|'left', class: '', wrap: true}
+      rows:    list of either a list of raw cell values, or
+               {cells: [...], href: url, class: ''} — `href` makes the row click through.
+      options: {empty: 'None.', class: '', id: ''}
+      ex: {{ ui.table(rows, [{label: 'Node'}, {label: 'CSI Hz', align: 'right'}],
+                      {empty: 'No node reported.'}) }}
+
+  table_start(columns, options = {}) / table_end()
+      Same header and chrome, your own `<tbody>`. See "WHY THERE IS BOTH" above.
+      ex: {{ ui.table_start([{label: 'Step'}, {label: 'State'}]) }}
+            {% for s in steps %}<tr><td>{{ s.name }}</td><td>{{ ui.state('done', 'ok') }}</td></tr>{% endfor %}
+          {{ ui.table_end() }}
+
+  cells(values, columns = [])  — optional helper for the table_start pattern: one `<td>` per
+      value, alignment taken from `columns` when given.
+
+  state(word, hue = 'muted')
+      A state as a WORD. hue in ok|warn|bad|muted — three semantic hues and a fourth that is
+      the absence of one. Never a badge, never a raw enum: pass 'in progress', not 'IN_PROGRESS'.
+      ex: {{ ui.state('completed', 'ok') }} · {{ ui.state('no sidecar', 'warn') }}
+
+  identity(name, email = null, href = null, pseudonym = null)
+      A person, spelled the same way on every page: the name, the address beneath it in muted.
+      `pseudonym` replaces both where the record is pseudonymous by design (a ground-truth
+      scan); it never appears beside a name, because that would join the two.
+      ex: {{ ui.identity(u.name, u.email, path('admin_participant', {id: u.id})) }}
+          {{ ui.identity(null, null, null, scan.participantToken) }}
+
+  clock(datetime)
+      An instant, 24-hour, in the operator time zone, with the zone abbreviation. Wraps the
+      `clock` filter from App\Twig\AdminExtension — never `|date` in a template.
+      ex: {{ ui.clock(session.firstArtefactAt) }}
+
+  empty_(text)
+      The sentence a page prints instead of a table when there is nothing. Says what would
+      appear and when, never just "no data". (`empty` is a Twig test name; hence the underscore.)
+      ex: {{ ui.empty_('No ground truth yet. A session appears when its first scan arrives.') }}
+
+  kv(rows)
+      A two-column fact table. rows: a map {label: value} or a list of {label, value}.
+      Values are raw. `null` prints a dash.
+      ex: {{ ui.kv({'Time zone': ui.id(tz), 'Page size': 50}) }}
+
+  id(uuid)
+      A short identifier: the first eight characters, monospaced, with the whole value in the
+      title attribute. Detail pages only — a UUID is never a list column.
+      ex: {{ ui.id(enrollment.id) }}
+ ═══════════════════════════════════════════════════════════════════════════════════════════
+#}
+
+{%- macro page_header(title, subtitle = null, actions = []) -%}
+    <div class="ui-head">
+        {%- if actions is not empty -%}
+            <div class="mc-top-actions" style="float:right">{{ _self.actions(actions) }}</div>
+        {%- endif -%}
+        <h2>{{ title }}</h2>
+        {%- if subtitle is not null %}<div class="sub">{{ subtitle }}</div>{% endif -%}
+    </div>
+{%- endmacro -%}
+
+{#- The action list used by page_header, and directly inside a `page_actions` block. -#}
+{%- macro actions(actions) -%}
+    {%- for a in actions -%}
+        {%- set kind = a.kind|default('default') -%}
+        {%- set cls = 'ui-btn' ~ (kind == 'primary' ? ' ui-btn-primary' : (kind == 'danger' ? ' ui-btn-danger' : '')) -%}
+        {%- if (a.method|default('get'))|lower == 'post' -%}
+            <form method="post" action="{{ a.href }}" class="ui-inline"{% if a.confirm is defined %} onsubmit="return confirm('{{ a.confirm|e('js') }}')"{% endif %}>
+                {%- if a.csrf is defined %}<input type="hidden" name="_token" value="{{ a.csrf }}">{% endif -%}
+                <button type="submit" class="{{ cls }}">{{ a.label }}</button>
+            </form>
+        {%- else -%}
+            <a class="{{ cls }}" href="{{ a.href }}">{{ a.label }}</a>
+        {%- endif -%}
+    {%- endfor -%}
+{%- endmacro -%}
+
+{%- macro tabs(items, active) -%}
+    <nav class="ui-tabs">
+        {%- for t in items -%}
+            <a href="{{ t.href }}" class="{{ t.label == active ? 'is-active' }}"{{ t.label == active ? ' aria-current="page"' : '' }}>{{ t.label }}{% if t.count is defined and t.count is not null %}<span class="n">{{ t.count }}</span>{% endif %}</a>
+        {%- endfor -%}
+    </nav>
+{%- endmacro -%}
+
+{%- macro strip(items) -%}
+    <div class="strip">
+        {%- for i in items -%}
+            <span><span class="k">{{ i.label }}</span>{% if i.href is defined and i.href is not null %}<a href="{{ i.href }}">{% endif %}{% if i.state is defined and i.state is not null %}<span class="state state-{{ i.state }}">{{ i.value|raw }}</span>{% else %}{{ i.value|raw }}{% endif %}{% if i.href is defined and i.href is not null %}</a>{% endif %}</span>
+        {%- endfor -%}
+    </div>
+{%- endmacro -%}
+
+{%- macro attention(items) -%}
+    <div class="attention">
+        {%- for i in items -%}
+            <a class="row state-{{ i.state|default('muted') }}" href="{{ i.href }}">
+                <span class="n">{{ i.count is defined and i.count is not null ? i.count : '·' }}</span>
+                <span class="what">{{ i.text }}</span>
+            </a>
+        {%- else -%}
+            <div class="clear">Nothing needs attention.</div>
+        {%- endfor -%}
+    </div>
+{%- endmacro -%}
+
+{%- macro table_start(columns, options = {}) -%}
+    <div class="ui-table-wrap">
+    <table class="ui-table {{ options.class|default('') }}"{% if options.id is defined %} id="{{ options.id }}"{% endif %}>
+        <thead><tr>
+            {%- for c in columns -%}
+                <th class="{{ c.align|default('left') == 'right' ? 'num' : '' }} {{ c.wrap|default(false) ? 'wrap' : '' }} {{ c.class|default('') }}"{% if c.width is defined %} style="width:{{ c.width }}"{% endif %}>{{ c.label }}</th>
+            {%- endfor -%}
+        </tr></thead>
+        <tbody>
+{%- endmacro -%}
+
+{%- macro table_end() -%}
+        </tbody>
+    </table>
+    </div>
+{%- endmacro -%}
+
+{%- macro cells(values, columns = []) -%}
+    {%- for v in values -%}
+        {%- set c = columns[loop.index0]|default({}) -%}
+        <td class="{{ c.align|default('left') == 'right' ? 'num' : '' }} {{ c.wrap|default(false) ? 'wrap' : '' }}">{{ v|raw }}</td>
+    {%- endfor -%}
+{%- endmacro -%}
+
+{%- macro table(rows, columns, options = {}) -%}
+    {{ _self.table_start(columns, options) }}
+        {%- for r in rows -%}
+            {%- set cells = r.cells is defined ? r.cells : r -%}
+            {%- set href = r.href is defined ? r.href : null -%}
+            <tr class="{{ href is not null ? 'clickable' : '' }} {{ r.class is defined ? r.class : '' }}"{% if href is not null %} data-row-href="{{ href }}"{% endif %}>
+                {{- _self.cells(cells, columns) -}}
+            </tr>
+        {%- else -%}
+            <tr><td colspan="{{ columns|length }}" class="wrap"><span class="ui-empty">{{ options.empty|default('None.') }}</span></td></tr>
+        {%- endfor -%}
+    {{ _self.table_end() }}
+{%- endmacro -%}
+
+{%- macro state(word, hue = 'muted') -%}
+    <span class="state state-{{ hue }}">{{ word }}</span>
+{%- endmacro -%}
+
+{%- macro identity(name, email = null, href = null, pseudonym = null) -%}
+    {%- if pseudonym is not null -%}
+        <span class="pseudonym" title="A pseudonym. This record carries no link to an account.">{{ pseudonym }}</span>
+    {%- else -%}
+        {%- set label = name is not empty ? name : (email is not empty ? email : 'account removed') -%}
+        <span class="identity">
+            {%- if href is not null -%}<a href="{{ href }}"><b>{{ label }}</b></a>{%- else -%}<b>{{ label }}</b>{%- endif -%}
+            {%- if email is not empty and name is not empty %}<span>{{ email }}</span>{% endif -%}
+        </span>
+    {%- endif -%}
+{%- endmacro -%}
+
+{%- macro clock(datetime) -%}
+    <span class="mono">{{ datetime|clock }}</span>
+{%- endmacro -%}
+
+{%- macro empty_(text) -%}
+    <p class="ui-empty">{{ text }}</p>
+{%- endmacro -%}
+
+{%- macro kv(rows) -%}
+    <div class="ui-table-wrap">
+    <table class="ui-table table-facts">
+        <tbody>
+        {%- for key, value in rows -%}
+            {%- set label = value.label is defined ? value.label : key -%}
+            {%- set val = value.value is defined ? value.value : value -%}
+            <tr><th class="wrap">{{ label }}</th><td class="wrap">{{ val is null ? '—' : val|raw }}</td></tr>
+        {%- else -%}
+            <tr><td class="wrap"><span class="ui-empty">Nothing reported.</span></td></tr>
+        {%- endfor -%}
+        </tbody>
+    </table>
+    </div>
+{%- endmacro -%}
+
+{%- macro id(uuid) -%}
+    <span class="short-id" title="{{ uuid }}">{{ uuid|short_id }}</span>
+{%- endmacro -%}

@@ -17,6 +17,21 @@ class GroundTruthConflictRepository extends ServiceEntityRepository
     }
 
     /**
+     * E3 contradictions observed since an instant.
+     *
+     * The Today page asks for the last seven days, because a conflict is only actionable while
+     * the people who produced it are still findable; the row itself is never reconciled (see
+     * the entity), so this is a count of things to LOOK at, not of things to fix.
+     */
+    public function countSince(\DateTimeImmutable $since): int
+    {
+        return (int) $this->createQueryBuilder('c')
+            ->select('COUNT(c.id)')
+            ->andWhere('c.observedAt >= :since')->setParameter('since', $since)
+            ->getQuery()->getSingleScalarResult();
+    }
+
+    /**
      * @return GroundTruthConflict[]
      */
     public function findForSession(string $labSessionId): array

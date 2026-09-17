@@ -23,6 +23,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
  */
 class QuestEnrollmentCrudController extends AbstractCrudController
 {
+    use StateWordFields;
+
     public static function getEntityFqcn(): string
     {
         return QuestEnrollment::class;
@@ -75,17 +77,11 @@ class QuestEnrollmentCrudController extends AbstractCrudController
         // `completedAt` arrives in the request body.
         yield DateTimeField::new('completionReceivedAt', 'Completion received')
             ->onlyOnDetail();
-        yield ChoiceField::new('status')
+        yield $this->state(ChoiceField::new('status')
             ->setChoices(array_combine(
                 array_map(static fn (QuestEnrollmentStatus $s) => $s->value, QuestEnrollmentStatus::cases()),
                 QuestEnrollmentStatus::cases(),
-            ))
-            ->renderAsBadges([
-                QuestEnrollmentStatus::IN_PROGRESS->value => 'info',
-                QuestEnrollmentStatus::COMPLETED->value => 'success',
-                QuestEnrollmentStatus::FAILED->value => 'danger',
-                QuestEnrollmentStatus::ABANDONED->value => 'secondary',
-            ]);
+            )));
         yield TextField::new('dataPath', 'Data path')->setRequired(false)->hideOnIndex();
         yield DateTimeField::new('completedAt', 'Completed')->setRequired(false);
         yield DateTimeField::new('createdAt', 'Created')->hideOnForm();

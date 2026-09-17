@@ -133,6 +133,19 @@ services:
         arguments:
             $timezone: '%env(MONAD_ADMIN_TIMEZONE)%'
 
+    # IP-157 Phase 8 — Settings prints the zone as a FACT rather than leaving the reader to
+    # infer it from an abbreviation on a row. Same variable the filter converts with, so the
+    # page and the timestamps cannot disagree about which clock the interface is on.
+    App\Controller\Admin\SettingsController:
+        arguments:
+            $adminTimezone: '%env(MONAD_ADMIN_TIMEZONE)%'
+
+    # The same zone reaches EasyAdmin's own date formatting through configureCrud(), so a CRUD
+    # column and a reading page cannot print two different instants for one row.
+    App\Controller\Admin\DashboardController:
+        arguments:
+            $adminTimezone: '%env(MONAD_ADMIN_TIMEZONE)%'
+
     # IP-157 — the beta signup page and its retention. The window is one number read in three
     # places (the consent sentence on /join, the contact-data note under it, and the purge), so
     # the three cannot disagree. DEFAULT_URI is the API's own base (https://api.monad.dubec.dev in

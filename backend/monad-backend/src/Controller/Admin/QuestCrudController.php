@@ -29,6 +29,8 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class QuestCrudController extends AbstractCrudController
 {
+    use StateWordFields;
+
     public static function getEntityFqcn(): string
     {
         return Quest::class;
@@ -70,7 +72,7 @@ class QuestCrudController extends AbstractCrudController
     {
         yield TextField::new('name');
         yield TextareaField::new('description');
-        yield TextField::new('audience');
+        yield $this->state(TextField::new('audience'));
         yield DateTimeField::new('availableFrom', 'From');
         yield DateTimeField::new('availableTo', 'To');
         yield NumberField::new('points')->setNumDecimals(1);
