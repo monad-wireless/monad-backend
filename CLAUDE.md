@@ -91,7 +91,11 @@ What is editable is a deliberate line, not an oversight:
 | Ground-truth scans, conflicts, step completions, skip records | **none** — device-reported measurement. A scan is never overwritten and a conflict is never reconciled (E3); an admin screen that could "fix" a row would make both unenforceable, invisibly, months before anyone reads the data. |
 | Lab bundle | **read-only** — Ansible renders it and bind-mounts it read-only, so an edit here would be reverted by the next run while appearing to have worked. |
 | Users | edit + anonymise. No hard delete: `softDelete()` scrubs identity in place and leaves the pseudonymous scans countable. Passwords are write-only and blank means "keep". |
-| Quests, steps, enrollments, News, QR codes | full CRUD. Step `config` is edited as raw JSON (`App\Form\JsonType`) and invalid JSON fails the form — a malformed config surfaces on a participant's phone as a step that does nothing. |
+| Quests and steps | the quest builder (`/admin/lab/quests`, IP-157): typed per-step forms from `App\Quest\Schema`, validated on the `QuestStep` entity so the admin, `lab_quest_write` and `POST /api/admin/quests` refuse the same config. A quest with step completions locks its steps; Duplicate makes a revision. Raw JSON only behind the Advanced toggle. |
+| Enrollments | edit (status, device), no NEW. |
+| Placement mirror (`lab_placements`) | **none from the admin** — written only by the MCP tool `lab_placements_write` from `monad-knowledge lab placements-export`; PostGIS is the position of record and this database cannot see it. |
+| Notifications | compose and schedule; **nothing editable after send**; a scheduled one can be cancelled. |
+| Beta signups | status changes (invited, declined, withdraw = scrub in place), notes, CSV export. Rows are created by `POST /join` only. |
 | Recording sessions | **none** — written by the upload path. The list is a CRUD index (filters, search); the detail is a reading page. |
 | Handsets | `label` only — an operator note next to a machine string. Everything else is what the phone reported. No NEW, no DELETE (`ON DELETE RESTRICT` from enrollments). |
 

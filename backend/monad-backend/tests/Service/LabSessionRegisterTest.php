@@ -32,8 +32,10 @@ class LabSessionRegisterTest extends KernelTestCase
         $this->em = $container->get(EntityManagerInterface::class);
         $this->register = $container->get(LabSessionRegister::class);
         $this->sessions = $container->get(LabSessionRepository::class);
+        // push_tokens is in the list because it references handsets (IP-157) and PostgreSQL
+        // refuses to truncate a referenced table on its own.
         $this->em->getConnection()->executeStatement(
-            'TRUNCATE lab_sessions, quest_step_skip_records, quest_step_completions, quest_enrollments, handsets'
+            'TRUNCATE lab_sessions, quest_step_skip_records, quest_step_completions, quest_enrollments, push_tokens, handsets'
         );
     }
 

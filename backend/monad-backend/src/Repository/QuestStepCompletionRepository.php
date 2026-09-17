@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\Quest;
 use App\Entity\QuestStepCompletion;
 use App\Enum\QuestStepCompletionStatus;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -65,6 +66,46 @@ class QuestStepCompletionRepository extends ServiceEntityRepository
             ->orderBy('c.createdAt', 'DESC')
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * How many completions point at this quest's steps (IP-157).
+     *
+     * The lock rule of the quest builder: `quest_step_completions.step_id` has no ON DELETE
+     * clause, so a quest with any completion cannot have its step rows replaced. The same fact
+     * `lab_quest_write` learns from the database, asked before the form is rendered.
+     */
+    public function countForQuest(Quest $quest): int
+    {
+        return (int) $this->createQueryBuilder('c')
+            ->select('COUNT(c.id)')
+            ->join('c.step', 's')
+            ->andWhere('s.quest = :quest')
+            ->setParameter('quest', $quest)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
+     * Completions per quest, for the builder's index. Quests with none are absent.
+     *
+     * @return array<string, int> keyed by quest id (RFC 4122)
+     */
+    public function countByQuest(): array
+    {
+        $rows = $this->createQueryBuilder('c')
+            ->select('IDENTITY(s.quest) AS quest_id, COUNT(c.id) AS n')
+            ->join('c.step', 's')
+            ->groupBy('s.quest')
+            ->getQuery()
+            ->getArrayResult();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(string) $row['quest_id']] = (int) $row['n'];
+        }
+
+        return $out;
     }
 
     /**

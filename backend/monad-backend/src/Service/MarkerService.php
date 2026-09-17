@@ -2,7 +2,9 @@
 
 namespace App\Service;
 
+use App\Entity\LabPlacement;
 use App\Entity\Quest;
+use App\Entity\QuestStep;
 use App\Enum\QuestStepType;
 use Doctrine\ORM\EntityManagerInterface;
 use Endroid\QrCode\Builder\Builder;
@@ -26,10 +28,25 @@ use Endroid\QrCode\Writer\WriterInterface;
  * Two step types reach a card and both are projected (IP-140): `scan_qr` names one
  * `expected_value`, and `probe` names a list of `targets`. Projecting only the first would leave a
  * probe's cards answering "unknown marker" on `/m/<code>` while working perfectly in the app.
+ *
+ * IP-157 adds the other half of the join: `lab_placements` says where a card or node IS, and
+ * `driftReport()` compares the two lists. The mirror is never the marker list; it is the
+ * position record the verdicts are computed against.
  */
 class MarkerService
 {
     private const SIZE = 600;
+
+    /**
+     * The one host a printed card resolves to. The same constant the app (`ProbeConfig.codeKey`),
+     * the portal (`marker_key`) and `monad-knowledge lab quest-check` (`check.py:code_key`) fold
+     * against: a URL on any other host is not a lab code and folds to nothing.
+     */
+    public const PORTAL_HOST = 'monad.dubec.dev';
+
+    public const VERDICT_MATCHED = 'matched';
+    public const VERDICT_SPARE = 'spare';
+    public const VERDICT_MISMATCH = 'mismatch';
 
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
@@ -52,12 +69,8 @@ class MarkerService
      */
     public function markers(): array
     {
-        $steps = $this->entityManager->createQuery(
-            'SELECT s, q FROM App\Entity\QuestStep s JOIN s.quest q WHERE s.type IN (:types) ORDER BY q.name, s.order'
-        )->setParameter('types', [QuestStepType::SCAN_QR, QuestStepType::PROBE])->getResult();
-
         $markers = [];
-        foreach ($steps as $step) {
+        foreach ($this->scanSteps() as $step) {
             $quest = $step->getQuest();
             $questId = (string) $quest?->getId();
 
@@ -111,7 +124,7 @@ class MarkerService
      *
      * @return array<string, string>
      */
-    public static function scannedValues(\App\Entity\QuestStep $step): array
+    public static function scannedValues(QuestStep $step): array
     {
         $config = $step->getConfig();
         $stepLabel = $step->getName() ?? '';
@@ -151,6 +164,227 @@ class MarkerService
 
         return [$value => $stepLabel !== '' ? $stepLabel : $value];
     }
+
+    // ── IP-157: the mirror and the drift verdicts ────────────────────────────────────────────
+
+    /**
+     * One card's identity, whichever form it was written in.
+     *
+     * A port of `monad-knowledge lab/check.py:code_key`, kept in step with it and with the
+     * handset's `ProbeConfig.codeKey` deliberately: lowercase, query and fragment stripped,
+     * trailing slash removed, trailing path segment taken, and a URL is a code only when its host
+     * is the portal. `https://monad.dubec.dev/m/MONAD-FP-07`, `/d/monad04` and the bare
+     * `monad-fp-07` all fold to the mirror key; `https://example.org/m/MONAD-FP-07` folds to ''.
+     * A checker that folded differently from the app would pass a quest the app cannot match.
+     */
+    public static function codeKey(string $raw): string
+    {
+        $s = trim($raw);
+        $s = explode('?', $s, 2)[0];
+        $s = explode('#', $s, 2)[0];
+        $s = rtrim($s, '/');
+        if ($s === '') {
+            return '';
+        }
+        if (str_contains($s, '://')) {
+            $s = explode('://', $s, 2)[1];
+            $slash = strpos($s, '/');
+            $host = $slash === false ? $s : substr($s, 0, $slash);
+            $rest = $slash === false ? '' : substr($s, $slash + 1);
+            if (strtolower($host) !== self::PORTAL_HOST) {
+                return '';
+            }
+            $s = $rest;
+        }
+        $segments = explode('/', $s);
+
+        return strtolower((string) end($segments));
+    }
+
+    /**
+     * The payload a card carries when no quest has named it yet: the portal's `/m/<key>` grammar,
+     * which is what the printed set uses (MarkerController). A matched card prints the string its
+     * quest names instead, so the sheet and the step agree byte for byte.
+     */
+    public static function cardPayload(string $key): string
+    {
+        return 'https://' . self::PORTAL_HOST . '/m/' . $key;
+    }
+
+    /**
+     * Where a quest stands relative to `$now`, as one word: `scheduled`, `hidden` or `live`.
+     *
+     * The single window rule. `lab_quest_list` reports it, and the drift verdicts count only
+     * `live` quests, so it lives here rather than once per caller. Not-yet-open beats
+     * already-closed on purpose: a window that opens after it closes says "nobody can run this",
+     * which `scheduled` also says, while `live` would invite somebody to try.
+     */
+    public static function questStatus(Quest $quest, \DateTimeImmutable $now): string
+    {
+        $from = $quest->getAvailableFrom();
+        $to = $quest->getAvailableTo();
+
+        if ($from !== null && $from > $now) {
+            return 'scheduled';
+        }
+        if ($to !== null && $to < $now) {
+            return 'hidden';
+        }
+
+        return 'live';
+    }
+
+    /**
+     * The mirror against the live quest set.
+     *
+     * The same rule as `monad-knowledge lab quest-check`, computed on demand and stored nowhere:
+     * a join result kept in a third place goes stale between the two it summarises. One floor
+     * when named, every floor when not (the Overview counter).
+     *
+     * @return array{
+     *     matched: list<array{key: string, kind: string, room: ?string, floor: string, values: list<string>, quests: list<array{id: string, name: string, status: string}>}>,
+     *     spare: list<array{key: string, kind: string, room: ?string, floor: string}>,
+     *     mismatch: list<array{key: string, values: list<string>, quests: list<array{id: string, name: string, status: string}>}>,
+     *     historical: list<array{key: string, values: list<string>, in_mirror: bool, quests: list<array{id: string, name: string, status: string}>}>,
+     *     synced_at: ?\DateTimeImmutable
+     * }
+     */
+    public function driftReport(?string $floor = null): array
+    {
+        $repository = $this->entityManager->getRepository(LabPlacement::class);
+        $placements = $floor === null
+            ? $repository->findBy([], ['floor' => 'ASC', 'kind' => 'ASC', 'key' => 'ASC'])
+            : $repository->findByFloor($floor);
+
+        return self::reconcile($placements, $this->scanSteps(), new \DateTimeImmutable());
+    }
+
+    /**
+     * The drift rule as a pure function, so it can be pinned without a database.
+     *
+     * Three verdicts and one side list:
+     *
+     *  - `matched`: a mirror row some LIVE quest names (by folded key, case-insensitive).
+     *  - `spare`: a mirror row no live quest names. Normal, not a fault: the fingerprint pool is
+     *    meant to outlive any one arm.
+     *  - `mismatch`: a value a live quest names that folds to no mirror row. The dangerous one —
+     *    a participant will stand in a corridor scanning something that is not there.
+     *  - `historical`: values named only by quests that are not live (hidden or scheduled). Kept
+     *    out of `mismatch` so an old duplicate such as a bare `MONAD-SHOWCASE-IN` in a retired
+     *    quest does not read as a fault tonight. `in_mirror` says whether the card still exists.
+     *
+     * A folded key is the identity: `https://monad.dubec.dev/m/MONAD-FP-07` and `monad-fp-07`
+     * name the same card. The exact strings named travel in `values`, because the print sheet
+     * renders what the quest names, not what the mirror calls it.
+     *
+     * @param list<LabPlacement> $placements
+     * @param list<QuestStep> $steps scan_qr and probe steps, each attached to its quest
+     * @return array{matched: list<array<string, mixed>>, spare: list<array<string, mixed>>, mismatch: list<array<string, mixed>>, historical: list<array<string, mixed>>, synced_at: ?\DateTimeImmutable}
+     */
+    public static function reconcile(array $placements, array $steps, \DateTimeImmutable $now): array
+    {
+        // Folded key -> {values: [exact strings], quests: {id: {...}}}, split by liveness.
+        /** @var array{live: array<string, array{values: array<string, true>, quests: array<string, array{id: string, name: string, status: string}>}>, other: array<string, array{values: array<string, true>, quests: array<string, array{id: string, name: string, status: string}>}>} $named */
+        $named = ['live' => [], 'other' => []];
+
+        foreach ($steps as $step) {
+            $quest = $step->getQuest();
+            if ($quest === null) {
+                continue;
+            }
+            $status = self::questStatus($quest, $now);
+            $bucket = $status === 'live' ? 'live' : 'other';
+            $questRow = ['id' => (string) $quest->getId(), 'name' => (string) $quest->getName(), 'status' => $status];
+
+            foreach (array_keys(self::scannedValues($step)) as $value) {
+                $value = (string) $value;
+                $key = self::codeKey($value);
+                if ($key === '') {
+                    continue;
+                }
+                $named[$bucket][$key] ??= ['values' => [], 'quests' => []];
+                $named[$bucket][$key]['values'][$value] = true;
+                $named[$bucket][$key]['quests'][$questRow['id']] = $questRow;
+            }
+        }
+
+        $live = $named['live'];
+        $other = $named['other'];
+
+        $matched = [];
+        $spare = [];
+        $syncedAt = null;
+        $mirrorKeys = [];
+
+        foreach ($placements as $placement) {
+            $key = self::codeKey($placement->getKey());
+            $mirrorKeys[$key] = true;
+            if ($syncedAt === null || $placement->getSyncedAt() > $syncedAt) {
+                $syncedAt = $placement->getSyncedAt();
+            }
+
+            $row = [
+                'key' => $placement->getKey(),
+                'kind' => $placement->getKind(),
+                'room' => $placement->getRoom(),
+                'floor' => $placement->getFloor(),
+            ];
+            if (isset($live[$key])) {
+                $row['values'] = array_keys($live[$key]['values']);
+                $row['quests'] = array_values($live[$key]['quests']);
+                $matched[] = $row;
+            } else {
+                $spare[] = $row;
+            }
+        }
+
+        $mismatch = [];
+        foreach ($live as $key => $entry) {
+            if (isset($mirrorKeys[$key])) {
+                continue;
+            }
+            $mismatch[] = [
+                'key' => $key,
+                'values' => array_keys($entry['values']),
+                'quests' => array_values($entry['quests']),
+            ];
+        }
+
+        $historical = [];
+        foreach ($other as $key => $entry) {
+            $historical[] = [
+                'key' => $key,
+                'values' => array_keys($entry['values']),
+                'in_mirror' => isset($mirrorKeys[$key]),
+                'quests' => array_values($entry['quests']),
+            ];
+        }
+
+        usort($mismatch, static fn (array $a, array $b): int => strcmp($a['key'], $b['key']));
+        usort($historical, static fn (array $a, array $b): int => strcmp($a['key'], $b['key']));
+
+        return [
+            'matched' => $matched,
+            'spare' => $spare,
+            'mismatch' => $mismatch,
+            'historical' => $historical,
+            'synced_at' => $syncedAt,
+        ];
+    }
+
+    /**
+     * Every scan_qr and probe step with its quest, the query both projections share.
+     *
+     * @return list<QuestStep>
+     */
+    private function scanSteps(): array
+    {
+        return $this->entityManager->createQuery(
+            'SELECT s, q FROM App\Entity\QuestStep s JOIN s.quest q WHERE s.type IN (:types) ORDER BY q.name, s.order'
+        )->setParameter('types', [QuestStepType::SCAN_QR, QuestStepType::PROBE])->getResult();
+    }
+
+    // ── rendering ────────────────────────────────────────────────────────────────────────────
 
     /**
      * Error correction H, deliberately: these are taped to a doorframe and scanned in a hurry, at

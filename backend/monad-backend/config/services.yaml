@@ -24,6 +24,9 @@ parameters:
     env(MONAD_METRICS_URL): ''
     env(MONAD_WEB_INTERNAL_URL): ''
     env(MONAD_WALK_FIGURE_KEY): ''
+    # IP-157 — the Firebase service account path; empty selects the null push adapter. Declared
+    # for the same reason as the three above: an UNSET variable must read as '' and not null.
+    env(MONAD_FCM_CREDENTIALS): ''
 
 services:
     # default configuration for services in *this* file
@@ -64,21 +67,33 @@ services:
         arguments:
             $configPath: '%kernel.project_dir%/config/lab/lab.json'
 
-    # OpenAPI Decorators - chained in order
-    # AuthDecorator wraps the base OpenApiFactory
+    # OpenAPI decorators, chained explicitly (IP-157). They used to decorate
+    # `api_platform.openapi.factory`; API Platform is gone, so the chain now starts at an empty
+    # document and ends in a Nelmio describer. Explicit arguments because three services
+    # implement OpenApiFactoryInterface and autowiring could not pick one.
     App\OpenApi\AuthDecorator:
-        decorates: 'api_platform.openapi.factory'
-        arguments: ['@App\OpenApi\AuthDecorator.inner']
+        arguments: ['@App\OpenApi\EmptyOpenApiFactory']
 
-    # QuestDecorator wraps AuthDecorator
     App\OpenApi\QuestDecorator:
-        decorates: 'App\OpenApi\AuthDecorator'
-        arguments: ['@App\OpenApi\QuestDecorator.inner']
+        arguments: ['@App\OpenApi\AuthDecorator']
 
-    # StorageDecorator wraps QuestDecorator
     App\OpenApi\StorageDecorator:
-        decorates: 'App\OpenApi\QuestDecorator'
-        arguments: ['@App\OpenApi\StorageDecorator.inner']
+        arguments: ['@App\OpenApi\QuestDecorator']
+
+    # What /api/doc renders from the chain above. Priority -100 is the one Nelmio gave its own
+    # ApiPlatformDescriber, so the merge order against the attribute (-200) and route (-400)
+    # describers is unchanged. `@serializer` rather than the bare object normalizer: nested
+    # models are only normalized through a normalizer that has the serializer injected.
+    #
+    # Known and pre-existing: swagger-php logs "Multiple definitions for @OA\Post()->requestBody"
+    # (54 PHP warnings per render) because POST /api/admin/quests is described twice, by
+    # #[OA\...] attributes on AdminController::createQuest() and by QuestDecorator. Moving this
+    # describer to -300 did not change the count (measured 2026-09-16); the merge itself logs.
+    # The fix is to describe that operation once, which is not this change's scope.
+    App\OpenApi\DecoratorDescriber:
+        arguments: ['@App\OpenApi\StorageDecorator', '@serializer']
+        tags:
+            - { name: 'nelmio_api_doc.describer', priority: -100 }
 
     # IP-128 — "is this node capturing?" as a quest-arming input. Fails open: an
     # unreachable metrics store must not take the participant path down. Empty
@@ -117,3 +132,29 @@ services:
     App\Twig\AdminExtension:
         arguments:
             $timezone: '%env(MONAD_ADMIN_TIMEZONE)%'
+
+    # IP-157 — the beta signup page and its retention. The window is one number read in three
+    # places (the consent sentence on /join, the contact-data note under it, and the purge), so
+    # the three cannot disagree. DEFAULT_URI is the API's own base (https://api.monad.dubec.dev in
+    # production): /join arrives with the site's Host and links its legal pages back here.
+    App\Controller\JoinController:
+        arguments:
+            $retentionDays: '%env(int:MONAD_BETA_RETENTION_DAYS)%'
+            $apiBaseUrl: '%env(DEFAULT_URI)%'
+            $publicSiteUrl: '%env(MONAD_PUBLIC_SITE_URL)%'
+
+    App\Controller\Admin\OnboardingController:
+        arguments:
+            $apiBaseUrl: '%env(DEFAULT_URI)%'
+
+    App\Command\BetaPurgeCommand:
+        arguments:
+            $retentionDays: '%env(int:MONAD_BETA_RETENTION_DAYS)%'
+
+    # IP-157 — the push transport. One port, two adapters, chosen once per container by
+    # PushSenderFactory: FCM (kreait) when MONAD_FCM_CREDENTIALS names a readable service-account
+    # file, the null adapter otherwise (inbox only, one log line per skipped send). A factory
+    # rather than an alias because the choice depends on a file existing at boot, which YAML
+    # cannot express.
+    App\Notification\PushSender:
+        factory: ['@App\Notification\PushSenderFactory', 'create']

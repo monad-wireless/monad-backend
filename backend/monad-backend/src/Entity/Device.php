@@ -62,7 +62,7 @@ class Device
     #[Assert\Length(max: 255)]
     private ?string $label = null;
 
-    /** Where it hangs, in human words. Mirrors `QrCode::$position`. */
+    /** Where it hangs, in human words. The surveyed position is `lab_placements` (IP-157), not this. */
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $location = null;
 

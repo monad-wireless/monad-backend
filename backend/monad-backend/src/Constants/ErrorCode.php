@@ -38,6 +38,12 @@ class ErrorCode
     /** IP-149 — the handset descriptor in a quest-start body. */
     public const VALIDATION_HANDSET_MALFORMED = 'VALIDATION_108';
     public const VALIDATION_HANDSET_TOO_LARGE = 'VALIDATION_109';
+    /** IP-157 — the per-user notification surface (/api/me/notifications*, push-token, preferences). */
+    public const VALIDATION_BODY_NOT_OBJECT = 'VALIDATION_110';
+    public const VALIDATION_PUSH_TOKEN_REQUIRED = 'VALIDATION_111';
+    public const VALIDATION_PUSH_PLATFORM_INVALID = 'VALIDATION_112';
+    public const VALIDATION_PREFERENCES_MALFORMED = 'VALIDATION_113';
+    public const VALIDATION_AFTER_INVALID = 'VALIDATION_114';
     public const VALIDATION_FAILED = 'VALIDATION_199';
 
     // Resource Errors (200-299)
@@ -93,6 +99,11 @@ class ErrorCode
             self::VALIDATION_NAME_TOO_LONG => 'Name is too long (max 255 characters)',
             self::VALIDATION_HANDSET_MALFORMED => 'Handset descriptor is malformed: it must be an object with handset_id and platform (ios|android), and only the keys the API knows',
             self::VALIDATION_HANDSET_TOO_LARGE => 'Handset descriptor exceeds 64 kB',
+            self::VALIDATION_BODY_NOT_OBJECT => 'Request body must be a JSON object',
+            self::VALIDATION_PUSH_TOKEN_REQUIRED => 'Push token is required (a non-empty string of at most 4096 characters)',
+            self::VALIDATION_PUSH_PLATFORM_INVALID => 'Push platform must be ios or android',
+            self::VALIDATION_PREFERENCES_MALFORMED => 'Notification preferences must be an object with boolean notify_general and notify_callouts',
+            self::VALIDATION_AFTER_INVALID => 'The after parameter must be an ISO-8601 instant, e.g. 2026-09-16T08:00:00Z',
             self::VALIDATION_FAILED => 'Validation failed',
 
             self::RESOURCE_NOT_FOUND => 'Requested resource not found',

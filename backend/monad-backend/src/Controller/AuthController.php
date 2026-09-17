@@ -7,6 +7,7 @@ use App\Entity\User;
 use App\Exception\AuthException;
 use App\Exception\SystemException;
 use App\Exception\ValidationException;
+use App\Join\BetaSignupLinker;
 use Doctrine\ORM\EntityManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -63,7 +64,8 @@ class AuthController extends AbstractController
         UserPasswordHasherInterface $passwordHasher,
         EntityManagerInterface $entityManager,
         ValidatorInterface $validator,
-        JWTTokenManagerInterface $jwtManager
+        JWTTokenManagerInterface $jwtManager,
+        BetaSignupLinker $betaSignups,
     ): JsonResponse {
         $data = json_decode($request->getContent(), true);
 
@@ -114,6 +116,10 @@ class AuthController extends AbstractController
 
         try {
             $entityManager->persist($user);
+            // IP-157: a beta signup with this email (case-insensitive) in `new` or `invited`
+            // becomes `registered` and the account joins the beta cohort, in the same flush as
+            // the account itself. The request and response shapes do not change.
+            $betaSignups->link($user);
             $entityManager->flush();
 
             // Generate JWT token for immediate login

@@ -1,0 +1,30 @@
+/*
+ * The onboarding desk (IP-157 Phase 5): /admin/people/onboarding. Tokens from admin.css.
+ * A dense table with per-row forms; the only styling job is keeping five small forms and a
+ * mailto link readable inside one cell.
+ */
+
+.onboarding .strip a { color: var(--ink); text-decoration: none; }
+.onboarding .strip a.on { color: var(--signal-ink); font-weight: 600; }
+.onboarding .strip .n { font-variant-numeric: tabular-nums; margin-left: 0.25rem; }
+
+.onboarding .filter { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem; font-size: 0.86rem; }
+.onboarding .filter label { margin: 0; display: inline-flex; gap: 0.3rem; align-items: center; }
+.onboarding .filter .btn { padding: 0.15rem 0.6rem; font-size: 0.8rem; }
+
+.onboarding td.actions { white-space: nowrap; }
+.onboarding td.actions form { display: inline-block; margin: 0 0.15rem 0 0; }
+.onboarding td.actions .btn { padding: 0.1rem 0.5rem; font-size: 0.76rem; line-height: 1.4; border: 1px solid var(--rule); background: var(--paper-sunk); color: var(--ink); }
+.onboarding td.actions .btn-invite { border-color: var(--signal-ink); color: var(--signal-ink); }
+.onboarding td.actions .btn-withdraw { color: var(--fault); }
+.onboarding td.actions .pair { display: inline-flex; gap: 0; margin-right: 0.35rem; }
+.onboarding td.actions .pair > * { margin: 0; }
+
+.onboarding td.notes { white-space: normal; min-width: 14rem; }
+.onboarding td.notes textarea { width: 100%; min-height: 2.4rem; font-size: 0.8rem; padding: 0.2rem 0.35rem; border: 1px solid var(--rule); background: #fff; resize: vertical; }
+.onboarding td.notes .btn { padding: 0.05rem 0.45rem; font-size: 0.72rem; margin-top: 0.15rem; border: 1px solid var(--rule); background: var(--paper-sunk); }
+
+.onboarding .by { display: block; color: var(--ink-muted); font-size: 0.72rem; }
+/* `margin-left: auto`, not `float`, because the filter row is a flex container and a float in
+   one is ignored. */
+.onboarding .export { margin-left: auto; font-size: 0.82rem; }

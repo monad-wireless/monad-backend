@@ -22,7 +22,9 @@ services:
     image: ${MONAD_API_IMAGE:-ghcr.io/monad-wireless/monad-backend:main}
     container_name: monad_api
     restart: unless-stopped
-    environment:
+    # The anchor is reused verbatim by the `worker` service below (IP-157): same image, same
+    # environment, so the two can never disagree about the database or the FCM path.
+    environment: &api_environment
       APP_ENV: prod
       APP_SECRET: ${APP_SECRET}
       # Points at the main stack's cluster over the shared network, so the host is a variable
@@ -60,6 +62,19 @@ services:
       # off and leaves every admin table unaffected.
       MONAD_WEB_INTERNAL_URL: ${MONAD_WEB_INTERNAL_URL:-}
       MONAD_WALK_FIGURE_KEY: ${MONAD_WALK_FIGURE_KEY:-}
+      # IP-157 — notifications and onboarding. Defaults match roles/monad_api/templates/env.j2.
+      # MONAD_FCM_CREDENTIALS is the path INSIDE the container of the Firebase service-account
+      # JSON; empty selects the null push adapter (inbox only). The PushSender checks is_file()
+      # on it, because the directory below is mounted whether or not the file exists.
+      MONAD_FCM_CREDENTIALS: ${MONAD_FCM_CREDENTIALS:-}
+      # Days after invitation before app:beta:purge removes a signup that never registered.
+      MONAD_BETA_RETENTION_DAYS: ${MONAD_BETA_RETENTION_DAYS:-90}
+      # /join renders its links against the public site, not this API's hostname.
+      MONAD_PUBLIC_SITE_URL: ${MONAD_PUBLIC_SITE_URL:-https://monad.dubec.dev}
+      # Doctrine transport: the push sends run in the `worker` service below (same image), so a
+      # composer click returns at once and a scheduled send needs no cron on the host. The
+      # transport table is created by messenger:setup-transports or auto_setup on first use.
+      MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN:-doctrine://default}
     ports:
       # Loopback only; api.monad.dubec.dev is terminated by the host nginx.
       # NOT 8080 — Headscale's control server already listens there, and the
@@ -68,11 +83,42 @@ services:
     volumes:
       - jwt_keys:/app/config/jwt
       - ./backend/monad-backend/config/lab/lab.json:/app/config/lab/lab.json:ro
+      # IP-157 — the Firebase service account, rendered by roles/monad_api from the vault into
+      # this DIRECTORY. The directory is mounted, not the file: a bind mount of a missing file
+      # makes Docker create a directory at the host path, and the next Ansible run then fails to
+      # write the file over it. Absent file = MONAD_FCM_CREDENTIALS empty = null push adapter.
+      - ./config/fcm/:/app/config/fcm/:ro
     networks:
       - monad
     # No depends_on: the database belongs to another compose project, so compose cannot order
     # against it. docker/entrypoint.sh already polls the DSN for 60s before migrating, which is
     # the check that has to exist anyway for a bare `docker run`.
+
+  # IP-157 — the Messenger worker: push sends (the `async` Doctrine transport) and the
+  # scheduler that runs `app:notifications:dispatch-due` every minute (`scheduler_default`).
+  # Same image and environment as the API; no ports, because nothing talks to it.
+  #
+  # The entrypoint is BYPASSED on purpose. docker/entrypoint.sh migrates, installs assets and
+  # warms the cache before exec'ing FrankenPHP, and it takes no arguments; running it here
+  # would race the API's migration at boot and then start a second web server. The worker
+  # therefore starts `bin/console` directly. Consequences: no DB wait (if the worker comes up
+  # before the API has migrated, `messenger:consume` exits and `restart: unless-stopped` brings
+  # it back), and the prod cache is warmed lazily on first boot into the container's own var/.
+  # `--time-limit` recycles the process hourly so a code deploy (new image) and a memory leak
+  # both resolve themselves; the restart policy starts it again.
+  worker:
+    image: ${MONAD_API_IMAGE:-ghcr.io/monad-wireless/monad-backend:main}
+    container_name: monad_worker
+    restart: unless-stopped
+    environment: *api_environment
+    entrypoint: ["php", "bin/console"]
+    command: ["messenger:consume", "scheduler_default", "async", "--time-limit=3600", "--memory-limit=256M"]
+    volumes:
+      - jwt_keys:/app/config/jwt
+      - ./backend/monad-backend/config/lab/lab.json:/app/config/lab/lab.json:ro
+      - ./config/fcm/:/app/config/fcm/:ro
+    networks:
+      - monad
 
 volumes:
   jwt_keys:

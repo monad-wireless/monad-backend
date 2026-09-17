@@ -2,16 +2,20 @@
 
 namespace App\Mcp;
 
+use App\Entity\LabPlacement;
 use App\Entity\Quest;
 use App\Entity\QuestStep;
 use App\Entity\User;
 use App\Enum\QuestStepType;
+use App\Repository\LabPlacementRepository;
 use App\Service\GroundTruthService;
 use App\Service\LabConfigService;
 use App\Service\MarkerService;
 use Doctrine\ORM\EntityManagerInterface;
 use Mcp\Capability\Attribute\McpTool;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\Uid\Uuid;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 /**
  * The lab's authoring surface.
@@ -32,6 +36,7 @@ class LabTools
         private readonly LabConfigService $labConfig,
         private readonly GroundTruthService $groundTruth,
         private readonly Security $security,
+        private readonly ValidatorInterface $validator,
     ) {
     }
 
@@ -261,14 +266,13 @@ class LabTools
         $hasProbe = false;
         $broadcastDeclared = false;
 
-        if ($existed) {
-            foreach ($quest->getSteps()->toArray() as $old) {
-                $quest->removeStep($old);
-            }
-            // The DELETEs have to reach the database before the replacements are inserted:
-            // (quest_id, order) is unique, and Doctrine emits INSERTs first within one flush.
-            $this->entityManager->flush();
-        }
+        // IP-157: every step is built and validated against its type's schema BEFORE the old
+        // steps are deleted, so an invalid payload leaves the stored quest untouched. Violations
+        // are an error, not a warning: this is the same rule the admin form and the API enforce,
+        // and an `observe` step without `min_readings` must not reach a phone from any path.
+        /** @var list<QuestStep> $built */
+        $built = [];
+        $violations = [];
 
         foreach ($steps as $i => $data) {
             $type = QuestStepType::tryFrom($data['type'] ?? '');
@@ -331,7 +335,33 @@ class LabTools
             $step->setName($data['name'] ?? null);
             $step->setType($type);
             $step->setOrder($data['order'] ?? $i);
-            $step->setConfig($config);
+            $step->setConfig((array) $config);
+
+            // Only the config property: `quest` is not set yet, and its NotNull is not the question.
+            foreach ($this->validator->validateProperty($step, 'config') as $violation) {
+                $violations[] = sprintf('Step %d (%s): %s', $i, $type->value, $violation->getMessage());
+            }
+
+            $built[] = $step;
+        }
+
+        if ($violations !== []) {
+            return [
+                'error' => sprintf('%d step config violation(s); nothing was written.', count($violations)),
+                'violations' => $violations,
+            ];
+        }
+
+        if ($existed) {
+            foreach ($quest->getSteps()->toArray() as $old) {
+                $quest->removeStep($old);
+            }
+            // The DELETEs have to reach the database before the replacements are inserted:
+            // (quest_id, order) is unique, and Doctrine emits INSERTs first within one flush.
+            $this->entityManager->flush();
+        }
+
+        foreach ($built as $step) {
             $quest->addStep($step);
             $this->entityManager->persist($step);
         }
@@ -522,18 +552,9 @@ class LabTools
      */
     private static function describeWindow(Quest $quest): string
     {
-        $now = new \DateTimeImmutable();
-        $from = $quest->getAvailableFrom();
-        $to = $quest->getAvailableTo();
-
-        if ($from !== null && $from > $now) {
-            return 'scheduled';
-        }
-        if ($to !== null && $to < $now) {
-            return 'hidden';
-        }
-
-        return 'live';
+        // The rule lives in MarkerService since IP-157: the drift verdicts count only live
+        // quests, and two copies of "is this on?" would eventually disagree about one evening.
+        return MarkerService::questStatus($quest, new \DateTimeImmutable());
     }
 
     /**
@@ -552,7 +573,7 @@ class LabTools
     {
         return ['markers' => array_map(static function (array $m): array {
             $m['svg_url'] = '/api/lab/markers/' . rawurlencode($m['value']) . '.svg';
-            $m['print_url'] = '/admin/lab/markers';
+            $m['print_url'] = '/admin/lab/placements/print';
 
             return $m;
         }, $this->markers->markers())];
@@ -576,6 +597,287 @@ class LabTools
             'value' => $value,
             'known_to_a_quest' => $this->markers->isKnown($value),
             'svg' => $this->markers->svg($value),
+        ];
+    }
+
+    // ── IP-157: the placement mirror ─────────────────────────────────────────────────────────
+
+    /**
+     * Replace one floor of the placement mirror.
+     *
+     * The payload is the definition of the floor, so replace-all rather than merge: a card that
+     * left PostGIS leaves the mirror, instead of lingering with a stale room. The whole floor is
+     * deleted and rewritten in ONE transaction, and every row of the new set carries the same
+     * fresh `sync_id`, so a half-applied import is impossible rather than merely unlikely.
+     *
+     * Validation runs to completion before anything is touched: an invalid payload returns every
+     * violation and leaves the previous mirror in place.
+     *
+     * @param list<array{key: string, kind: string, room?: ?string, x_m: float, y_m: float, z_cm?: ?float, provenance?: ?string, source_updated_at?: ?string}> $placements
+     * @return array<string, mixed>
+     */
+    #[McpTool(
+        name: 'lab_placements_write',
+        description: <<<'TXT'
+            Replace every mirrored placement of one floor with the given set, in one transaction.
+
+            Produce the argument object with
+                uv run monad-knowledge lab placements-export --floor fiit-ground-0
+            which reads the marker cards and fleet nodes out of PostGIS. This backend cannot see
+            PostGIS (its role is refused access on purpose), so the mirror is how the board and
+            the quest builder learn where a card or node stands. Hand-editing the payload is
+            possible and pointless: the next export overwrites it.
+
+            placements is a list of {key, kind, room, x_m, y_m, z_cm, provenance,
+            source_updated_at}. key is the card code (MONAD-FP-07) or node hostname (monad03);
+            kind is card|node; room may be null (a point PostGIS assigns to no cell is still
+            listed, in the stale hue); z_cm, provenance and source_updated_at may be null.
+
+            Keys must be unique per floor case-insensitively, because a scan is matched
+            case-insensitively and two rows that differ by case would be one card twice.
+
+            Returns the counts, the keys without a room, the new synced_at, and the drift report
+            (matched / spare / mismatch / historical) against the live quests — the same verdicts
+            the placement board shows and `lab quest-check` prints.
+            TXT,
+    )]
+    public function placementsWrite(
+        string $floor,
+        string $layer_cards,
+        string $layer_nodes,
+        array $placements,
+    ): array {
+        $floor = trim($floor);
+        $violations = [];
+        if ($floor === '') {
+            $violations[] = 'floor must not be empty.';
+        }
+        if (trim($layer_cards) === '') {
+            $violations[] = 'layer_cards must not be empty.';
+        }
+        if (trim($layer_nodes) === '') {
+            $violations[] = 'layer_nodes must not be empty.';
+        }
+        if (!array_is_list($placements)) {
+            $violations[] = 'placements must be a list.';
+            $placements = [];
+        }
+
+        $isNumber = static fn (mixed $v): bool => (is_int($v) || is_float($v)) && !is_bool($v);
+        $seen = [];
+        /** @var list<array<string, mixed>> $clean */
+        $clean = [];
+
+        foreach ($placements as $i => $p) {
+            if (!is_array($p)) {
+                $violations[] = sprintf('placements[%d] is not an object.', $i);
+                continue;
+            }
+            $key = trim((string) ($p['key'] ?? ''));
+            $kind = (string) ($p['kind'] ?? '');
+            $room = $p['room'] ?? null;
+            $provenance = $p['provenance'] ?? null;
+            $sourceUpdatedAt = $p['source_updated_at'] ?? null;
+
+            if ($key === '') {
+                $violations[] = sprintf('placements[%d]: key must not be empty.', $i);
+            } elseif (isset($seen[strtolower($key)])) {
+                $violations[] = sprintf(
+                    'placements[%d]: key "%s" repeats "%s" (keys are unique per floor, case-insensitively).',
+                    $i,
+                    $key,
+                    $seen[strtolower($key)],
+                );
+            } else {
+                $seen[strtolower($key)] = $key;
+            }
+            if (!in_array($kind, LabPlacement::KINDS, true)) {
+                $violations[] = sprintf('placements[%d] (%s): kind must be card or node, "%s" given.', $i, $key, $kind);
+            }
+            if (!$isNumber($p['x_m'] ?? null) || !$isNumber($p['y_m'] ?? null)) {
+                $violations[] = sprintf('placements[%d] (%s): x_m and y_m must be numbers in metres.', $i, $key);
+            }
+            if (array_key_exists('z_cm', $p) && $p['z_cm'] !== null && !$isNumber($p['z_cm'])) {
+                $violations[] = sprintf('placements[%d] (%s): z_cm must be a number or null.', $i, $key);
+            }
+            if ($room !== null && !is_string($room)) {
+                $violations[] = sprintf('placements[%d] (%s): room must be a string or null.', $i, $key);
+            }
+            if ($provenance !== null && !is_string($provenance)) {
+                $violations[] = sprintf('placements[%d] (%s): provenance must be a string or null.', $i, $key);
+            }
+            $stamp = null;
+            if ($sourceUpdatedAt !== null) {
+                try {
+                    $stamp = is_string($sourceUpdatedAt) ? new \DateTimeImmutable($sourceUpdatedAt) : null;
+                } catch (\Exception) {
+                    $stamp = null;
+                }
+                if ($stamp === null) {
+                    $violations[] = sprintf('placements[%d] (%s): source_updated_at must be an ISO 8601 timestamp or null.', $i, $key);
+                }
+            }
+
+            $clean[] = [
+                'key' => $key,
+                'kind' => $kind,
+                'room' => is_string($room) && trim($room) !== '' ? trim($room) : null,
+                'x_m' => (float) ($p['x_m'] ?? 0),
+                'y_m' => (float) ($p['y_m'] ?? 0),
+                'z_cm' => isset($p['z_cm']) && $isNumber($p['z_cm']) ? (float) $p['z_cm'] : null,
+                'provenance' => is_string($provenance) && trim($provenance) !== '' ? trim($provenance) : null,
+                'source_updated_at' => $stamp,
+            ];
+        }
+
+        if ($violations !== []) {
+            return [
+                'error' => sprintf('%d violation(s); the mirror for "%s" is unchanged.', count($violations), $floor),
+                'violations' => $violations,
+            ];
+        }
+
+        $syncId = Uuid::v4();
+        $syncedAt = new \DateTimeImmutable();
+        /** @var LabPlacementRepository $repository */
+        $repository = $this->entityManager->getRepository(LabPlacement::class);
+
+        $this->entityManager->wrapInTransaction(function () use ($repository, $floor, $layer_cards, $layer_nodes, $clean, $syncId, $syncedAt): void {
+            // The DELETE reaches the database inside this transaction, before the INSERTs of
+            // the same flush: (floor, key) is unique and Doctrine emits inserts first otherwise.
+            $repository->deleteFloor($floor);
+            foreach ($clean as $row) {
+                $placement = new LabPlacement(
+                    $row['key'],
+                    $row['kind'],
+                    $floor,
+                    $row['kind'] === LabPlacement::KIND_CARD ? trim($layer_cards) : trim($layer_nodes),
+                    $row['x_m'],
+                    $row['y_m'],
+                    $syncId,
+                    $syncedAt,
+                );
+                $placement->setRoom($row['room'])
+                    ->setZCm($row['z_cm'])
+                    ->setProvenance($row['provenance'])
+                    ->setSourceUpdatedAt($row['source_updated_at']);
+                $this->entityManager->persist($placement);
+            }
+            $this->entityManager->flush();
+        });
+
+        $cards = array_values(array_filter($clean, static fn (array $r): bool => $r['kind'] === LabPlacement::KIND_CARD));
+        $nodes = array_values(array_filter($clean, static fn (array $r): bool => $r['kind'] === LabPlacement::KIND_NODE));
+        $withoutRoom = array_values(array_map(
+            static fn (array $r): string => $r['key'],
+            array_filter($clean, static fn (array $r): bool => $r['room'] === null),
+        ));
+
+        return [
+            'floor' => $floor,
+            'layer_cards' => trim($layer_cards),
+            'layer_nodes' => trim($layer_nodes),
+            'cards' => count($cards),
+            'nodes' => count($nodes),
+            'without_room' => $withoutRoom,
+            'synced_at' => $syncedAt->format(\DateTimeInterface::ATOM),
+            'sync_id' => $syncId->toRfc4122(),
+            'drift' => self::driftForWire($this->markers->driftReport($floor)),
+        ];
+    }
+
+    /**
+     * The mirror of one floor plus its drift, for a session that wants to check sync without
+     * opening the admin.
+     *
+     * @return array<string, mixed>
+     */
+    #[McpTool(
+        name: 'lab_placements_read',
+        description: <<<'TXT'
+            Read the placement mirror of one floor: every mirrored card and node with room,
+            coordinates, provenance and sync stamps, plus the drift report against the live
+            quests (matched / spare / mismatch / historical).
+
+            An empty `placements` with `synced_at: null` means the floor has never been
+            mirrored: run `uv run monad-knowledge lab placements-export --floor <floor>` and
+            pass its output to lab_placements_write.
+            TXT,
+    )]
+    public function placementsRead(string $floor): array
+    {
+        $floor = trim($floor);
+        /** @var LabPlacementRepository $repository */
+        $repository = $this->entityManager->getRepository(LabPlacement::class);
+        $rows = $repository->findByFloor($floor);
+
+        $layers = ['card' => null, 'node' => null];
+        $syncIds = [];
+        $syncedAt = null;
+        foreach ($rows as $row) {
+            $layers[$row->getKind()] ??= $row->getLayer();
+            $syncIds[$row->getSyncId()->toRfc4122()] = true;
+            if ($syncedAt === null || $row->getSyncedAt() > $syncedAt) {
+                $syncedAt = $row->getSyncedAt();
+            }
+        }
+
+        $out = [
+            'floor' => $floor,
+            'layer_cards' => $layers['card'],
+            'layer_nodes' => $layers['node'],
+            'cards' => count(array_filter($rows, static fn (LabPlacement $p): bool => $p->getKind() === LabPlacement::KIND_CARD)),
+            'nodes' => count(array_filter($rows, static fn (LabPlacement $p): bool => $p->getKind() === LabPlacement::KIND_NODE)),
+            'synced_at' => $syncedAt?->format(\DateTimeInterface::ATOM),
+            // More than one id on a floor would mean a sync that half-applied. The write is
+            // transactional so it should never happen; reported so it can be seen if it does.
+            'sync_ids' => array_keys($syncIds),
+            'known_floors' => $repository->floors(),
+            'placements' => array_map(static fn (LabPlacement $p): array => [
+                'key' => $p->getKey(),
+                'kind' => $p->getKind(),
+                'layer' => $p->getLayer(),
+                'room' => $p->getRoom(),
+                'x_m' => $p->getXM(),
+                'y_m' => $p->getYM(),
+                'z_cm' => $p->getZCm(),
+                'provenance' => $p->getProvenance(),
+                'source_updated_at' => $p->getSourceUpdatedAt()?->format(\DateTimeInterface::ATOM),
+                'synced_at' => $p->getSyncedAt()->format(\DateTimeInterface::ATOM),
+            ], $rows),
+            'drift' => self::driftForWire($this->markers->driftReport($floor)),
+        ];
+        if ($rows === []) {
+            $out['note'] = sprintf(
+                'Floor "%s" has never been mirrored. Run `uv run monad-knowledge lab placements-export --floor %s` and pass the output to lab_placements_write.',
+                $floor,
+                $floor,
+            );
+        }
+
+        return $out;
+    }
+
+    /**
+     * The drift report with its instant serialised and the counts up front.
+     *
+     * @param array{matched: list<array<string, mixed>>, spare: list<array<string, mixed>>, mismatch: list<array<string, mixed>>, historical: list<array<string, mixed>>, synced_at: ?\DateTimeImmutable} $drift
+     * @return array<string, mixed>
+     */
+    private static function driftForWire(array $drift): array
+    {
+        return [
+            'summary' => [
+                'matched' => count($drift['matched']),
+                'spare' => count($drift['spare']),
+                'mismatch' => count($drift['mismatch']),
+                'historical' => count($drift['historical']),
+            ],
+            'matched' => $drift['matched'],
+            'spare' => $drift['spare'],
+            'mismatch' => $drift['mismatch'],
+            'historical' => $drift['historical'],
+            'synced_at' => $drift['synced_at']?->format(\DateTimeInterface::ATOM),
         ];
     }
 

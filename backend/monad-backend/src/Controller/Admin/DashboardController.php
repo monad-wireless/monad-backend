@@ -7,11 +7,8 @@ use App\Entity\GroundTruthConflict;
 use App\Entity\GroundTruthScan;
 use App\Entity\Handset;
 use App\Entity\LabSession;
-use App\Entity\News;
-use App\Entity\QrCode;
 use App\Entity\Quest;
 use App\Entity\QuestEnrollment;
-use App\Entity\QuestStep;
 use App\Entity\QuestStepCompletion;
 use App\Entity\QuestStepSkipRecord;
 use App\Entity\User;
@@ -24,7 +21,6 @@ use App\Repository\QuestEnrollmentRepository;
 use App\Repository\QuestRepository;
 use App\Service\GroundTruthService;
 use App\Service\LabConfigService;
-use App\Service\MarkerService;
 use App\Service\S3Service;
 use App\Service\WalkFigureUrlSigner;
 use Doctrine\ORM\EntityManagerInterface;
@@ -211,8 +207,14 @@ class DashboardController extends AbstractDashboardController
         ]);
     }
 
-    /** One participant: runs, sessions, the phones they used, and what their walking produced. */
-    #[AdminRoute(path: '/people/{id}', name: 'participant')]
+    /**
+     * One participant: runs, sessions, the phones they used, and what their walking produced.
+     *
+     * `{id}` is constrained to a UUID because /admin/people/onboarding and
+     * /admin/people/notifications (IP-157) sit under the same prefix and this route is
+     * registered first; without the requirement "onboarding" matched here as an id.
+     */
+    #[AdminRoute(path: '/people/{id}', name: 'participant', options: ['requirements' => ['id' => '[0-9a-fA-F-]{36}']])]
     public function participant(string $id): Response
     {
         $user = Uuid::isValid($id) ? $this->entityManager->getRepository(User::class)->find(Uuid::fromString($id)) : null;
@@ -293,13 +295,6 @@ class DashboardController extends AbstractDashboardController
         ]);
     }
 
-    /** The printable marker sheet, derived from the quests so codes and matched strings cannot drift. */
-    #[AdminRoute(path: '/lab/markers', name: 'lab_markers')]
-    public function labMarkers(MarkerService $markers): Response
-    {
-        return $this->render('admin/markers.html.twig', ['markers' => $markers->markers()]);
-    }
-
     /**
      * The lab bundle exactly as /api/lab/config serves it. Read-only: Ansible renders it from
      * inventory and bind-mounts it read-only, so a form here would write a file the next run
@@ -366,42 +361,56 @@ class DashboardController extends AbstractDashboardController
 
     public function configureAssets(): Assets
     {
-        // Loaded after the theme so every rule wins by order: sharp corners, tables, borders.
-        return Assets::new()->addCssFile('admin.css');
+        // admin.css carries the site tokens and is loaded after the theme so every rule wins by
+        // order. The four per-lane pairs (IP-157) are empty in Phase 1 and are owned by the lane
+        // named in each file's header; registering them here means a lane adds rules, not wiring.
+        return Assets::new()
+            ->addCssFile('admin.css')
+            ->addCssFile('admin-quests.css')
+            ->addCssFile('admin-placements.css')
+            ->addCssFile('admin-notifications.css')
+            ->addCssFile('admin-onboarding.css')
+            ->addJsFile('admin-quests.js')
+            ->addJsFile('admin-placements.js')
+            ->addJsFile('admin-notifications.js')
+            ->addJsFile('admin-onboarding.js');
     }
 
+    /**
+     * Four sections (IP-157): what the lab IS (Lab), what it RECORDED (Runs), WHO takes part
+     * (People), and the system. The Quest CRUD and the Quest steps CRUD left the menu: the builder
+     * owns quest authoring and the CRUD index is still reachable from the analytics pages. The scan
+     * marker page left too; the placement board replaces it and keeps its print sheet.
+     */
     public function configureMenuItems(): iterable
     {
         yield MenuItem::linkToDashboard('Overview', 'fa fa-gauge');
+
+        yield MenuItem::section('Lab');
+        yield MenuItem::linkToRoute('Quests', 'fa fa-flag', 'admin_lab_quests');
+        yield MenuItem::linkToRoute('Placement board', 'fa fa-map-location-dot', 'admin_lab_placements');
+        yield MenuItem::linkToRoute('Arming matrix', 'fa fa-table-cells', 'admin_lab_arming');
+        yield MenuItem::linkToRoute('Fleet vitals', 'fa fa-heart-pulse', 'admin_lab_fleet');
+        yield MenuItem::linkToCrud('Devices (fleet)', 'fa fa-microchip', Device::class);
+        yield MenuItem::linkToRoute('Lab bundle', 'fa fa-sliders', 'admin_lab_bundle');
 
         yield MenuItem::section('Runs');
         yield MenuItem::linkToCrud('Recording sessions', 'fa fa-folder-open', LabSession::class);
         yield MenuItem::linkToCrud('Enrollments', 'fa fa-user-check', QuestEnrollment::class);
         yield MenuItem::linkToCrud('Handsets', 'fa fa-mobile-screen', Handset::class);
         yield MenuItem::linkToRoute('Quest analytics', 'fa fa-chart-simple', 'admin_quests_analytics');
-
-        yield MenuItem::section('Lab operations');
-        yield MenuItem::linkToRoute('Arming matrix', 'fa fa-table-cells', 'admin_lab_arming');
-        yield MenuItem::linkToRoute('Fleet vitals', 'fa fa-heart-pulse', 'admin_lab_fleet');
-        yield MenuItem::linkToRoute('Ground-truth sessions', 'fa fa-satellite-dish', 'admin_lab_sessions');
+        yield MenuItem::linkToRoute('Ground truth', 'fa fa-satellite-dish', 'admin_lab_sessions');
         yield MenuItem::linkToCrud('Ground-truth scans', 'fa fa-qrcode', GroundTruthScan::class);
         yield MenuItem::linkToCrud('Scan conflicts (E3)', 'fa fa-triangle-exclamation', GroundTruthConflict::class);
-        yield MenuItem::linkToRoute('Scan markers', 'fa fa-qrcode', 'admin_lab_markers');
-        yield MenuItem::linkToRoute('Lab bundle', 'fa fa-sliders', 'admin_lab_bundle');
-
-        yield MenuItem::section('People');
-        yield MenuItem::linkToCrud('Users', 'fa fa-user', User::class);
-
-        yield MenuItem::section('Content');
-        yield MenuItem::linkToCrud('Devices (fleet)', 'fa fa-microchip', Device::class);
-        yield MenuItem::linkToCrud('Quests', 'fa fa-flag', Quest::class);
-        yield MenuItem::linkToCrud('Quest steps', 'fa fa-list-ol', QuestStep::class);
         yield MenuItem::linkToCrud('Step completions', 'fa fa-circle-check', QuestStepCompletion::class);
         yield MenuItem::linkToCrud('Skip records', 'fa fa-forward', QuestStepSkipRecord::class);
-        yield MenuItem::linkToCrud('News', 'fa fa-newspaper', News::class);
-        yield MenuItem::linkToCrud('QR codes', 'fa fa-square-full', QrCode::class);
 
-        yield MenuItem::section();
+        yield MenuItem::section('People');
+        yield MenuItem::linkToCrud('Participants', 'fa fa-user', User::class);
+        yield MenuItem::linkToRoute('Onboarding desk', 'fa fa-door-open', 'admin_people_onboarding');
+        yield MenuItem::linkToRoute('Notifications', 'fa fa-bell', 'admin_people_notifications');
+
+        yield MenuItem::section('System');
         yield MenuItem::linkToUrl('API docs', 'fa fa-book', '/api/doc');
         yield MenuItem::linkToLogout('Sign out', 'fa fa-right-from-bracket');
     }

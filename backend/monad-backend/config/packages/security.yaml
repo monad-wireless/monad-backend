@@ -62,6 +62,10 @@ security:
                 path: admin_logout
                 target: admin_login
 
+        # Everything else, including /join (IP-157): a public HTML form proxied from the site's
+        # nginx vhost. Not pattern-scoped, so /join needs no pattern change here; it is a
+        # PUBLIC_ACCESS line in access_control below, and its protection is the honeypot field and
+        # the rate limiter in JoinController, not a login.
         main:
             lazy: true
             provider: app_user_provider
@@ -125,7 +129,15 @@ security:
         # never reviewed for.
         - { path: ^/api/lab/fleet/history$, roles: PUBLIC_ACCESS }
         - { path: ^/api/admin, roles: ROLE_SUPERADMIN }
+        # IP-157 — the per-user notification surface (`/api/me/notifications*`,
+        # `/api/me/push-token`, `/api/me/notification-preferences`) needs no line of its own:
+        # it falls under this catch-all, IS_AUTHENTICATED_FULLY on the jwt firewall, and every
+        # handler reads getUser() and nothing else.
         - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
+        # IP-157 — the beta signup form, GET and POST, reached as monad.dubec.dev/join through
+        # the site's nginx. Anchored so a future /join/<admin-ish> path does not inherit it;
+        # the confirmation page is the POST response, not a sub-path.
+        - { path: ^/join$, roles: PUBLIC_ACCESS }
 
 when@test:
     security:

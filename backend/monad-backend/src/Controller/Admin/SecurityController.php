@@ -25,7 +25,8 @@ class SecurityController extends AbstractController
             'error' => $authenticationUtils->getLastAuthenticationError(),
             'last_username' => $authenticationUtils->getLastUsername(),
 
-            'translation_domain' => 'admin',
+            // No translation_domain: there is no translations/ directory, and the labels below
+            // are passed as literal strings, so the template's default domain is fine.
             'favicon_path' => '/favicon.ico',
             'page_title' => 'MonadCount',
             'csrf_token_intention' => 'authenticate',

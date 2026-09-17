@@ -1,0 +1,103 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block content_title %}Quests{% endblock %}
+
+{% block page_actions %}
+    <a class="btn btn-primary" href="{{ path('admin_lab_quests_new') }}">New quest</a>
+{% endblock %}
+
+{% block main %}
+    <p class="text-muted small">
+        Every quest, with its status against the clock: <strong>live</strong> (a participant can run it now),
+        <strong>scheduled</strong> (opens later) or <strong>hidden</strong> (its window has closed). A quest with
+        step completions is <strong>locked</strong>: its step rows are what the completions point at, so the
+        builder edits its header only and offers Duplicate for a revision.
+    </p>
+
+    <div class="card mb-3">
+        <div class="table-responsive">
+            <table class="table table-sm table-dense mb-0 quests-index">
+                <thead>
+                    <tr>
+                        <th>Quest</th>
+                        <th>Status</th>
+                        <th>Audience</th>
+                        <th>Window</th>
+                        <th class="num">Points</th>
+                        <th class="num">Steps</th>
+                        <th class="num">Completions</th>
+                        <th>Lock</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        {% set q = row.quest %}
+                        <tr>
+                            <td class="wrap"><a href="{{ path('admin_lab_quests_edit', {id: q.id}) }}">{{ q.name }}</a></td>
+                            <td>
+                                {% set cls = {live: 'state-ok', scheduled: 'state-muted', hidden: 'state-warn'} %}
+                                <span class="state {{ cls[row.status] ?? 'state-muted' }}">{{ row.status }}</span>
+                            </td>
+                            <td>{{ q.audience }}</td>
+                            <td>{{ q.availableFrom|clock }} → {{ q.availableTo ? q.availableTo|clock : 'open' }}</td>
+                            <td class="num">{{ q.points|number_format(1) }}</td>
+                            <td class="num">{{ q.steps|length }}</td>
+                            <td class="num">{{ row.completions }}</td>
+                            <td>{% if row.locked %}<span class="state state-warn">locked</span>{% else %}<span class="state state-muted">open</span>{% endif %}</td>
+                            <td class="actions">
+                                <a href="{{ path('admin_lab_quests_edit', {id: q.id}) }}">Edit</a>
+                                <form method="post" action="{{ path('admin_lab_quests_duplicate', {id: q.id}) }}" class="d-inline">
+                                    <input type="hidden" name="_token" value="{{ csrf_token(csrf) }}">
+                                    <button type="submit" class="btn btn-link btn-sm p-0 align-baseline">Duplicate</button>
+                                </form>
+                                {% if row.status != 'hidden' %}
+                                    <form method="post" action="{{ path('admin_lab_quests_hide', {id: q.id}) }}" class="d-inline" onsubmit="return confirm('Hide {{ q.name|e('js') }} now? It stops being offered; enrolments and completions stay.');">
+                                        <input type="hidden" name="_token" value="{{ csrf_token(csrf) }}">
+                                        <button type="submit" class="btn btn-link btn-sm p-0 align-baseline">Hide now</button>
+                                    </form>
+                                {% endif %}
+                                <a href="{{ path('admin_lab_quests_export', {id: q.id}) }}">Export JSON</a>
+                                <a href="{{ path('admin_quest_analytics', {id: q.id}) }}">Analytics</a>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="9" class="text-muted">No quests. Create one, or import a <code>lab_quest_write</code> payload below.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card" id="import">
+        <div class="card-header">Import JSON</div>
+        <div class="card-body">
+            <p class="text-muted small">
+                The exact <code>lab_quest_write</code> argument shape: <code>{name, description, available_from, steps: [{order, name, type, config}], available_to, estimated_duration, points, audience, route_pool}</code>.
+                Creates the quest, or replaces the one with the same name. Every step is validated against its type's schema before anything is written;
+                a quest with step completions is refused, the same rule the MCP tool follows.
+            </p>
+            {% for error in import_errors %}
+                <div class="alert alert-danger">{{ error }}</div>
+            {% endfor %}
+            {% if import_violations is not empty %}
+                <div class="alert alert-danger">
+                    <strong>{{ import_violations|length }} step config violation(s); nothing was written.</strong>
+                    <ul class="mb-0">{% for v in import_violations %}<li>{{ v }}</li>{% endfor %}</ul>
+                </div>
+            {% endif %}
+            <form method="post" action="{{ path('admin_lab_quests_import') }}" enctype="multipart/form-data" class="quest-import">
+                <input type="hidden" name="_token" value="{{ csrf_token(csrf) }}">
+                <div class="mb-2">
+                    <label class="form-label" for="import-file">File</label>
+                    <input class="form-control" type="file" id="import-file" name="file" accept="application/json,.json">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label" for="import-json">Or paste</label>
+                    <textarea class="form-control font-monospace" id="import-json" name="json" rows="8" placeholder='{"name": "…", "description": "…", "available_from": "2026-09-15T00:00:00+00:00", "steps": [ … ]}'>{{ import_json }}</textarea>
+                </div>
+                <button type="submit" class="btn btn-secondary">Import</button>
+            </form>
+        </div>
+    </div>
+{% endblock %}

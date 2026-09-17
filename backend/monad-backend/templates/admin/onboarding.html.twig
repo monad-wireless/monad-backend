@@ -1,0 +1,118 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{# The onboarding desk (IP-157 Phase 5). Rules in public/admin-onboarding.css, island in
+   public/admin-onboarding.js (status filter auto-submit, withdraw confirm); both optional. #}
+
+{% block content_title %}Onboarding desk{% endblock %}
+
+{% block main %}
+    {% set token = csrf_token('onboarding') %}
+    <div class="onboarding">
+        <div class="strip">
+            {% for s in all_statuses %}
+                <span><a href="{{ path('admin_people_onboarding', {status: s}) }}" class="{{ s in statuses ? 'on' }}"><span class="k">{{ s }}</span><span class="n">{{ counts[s] ?? 0 }}</span></a></span>
+            {% endfor %}
+            <span><a href="{{ path('admin_people_onboarding', {status: 'all'}) }}" class="{{ statuses is empty ? 'on' }}"><span class="k">all</span><span class="n">{{ counts|reduce((c, n) => c + n, 0) }}</span></a></span>
+        </div>
+
+        <form method="get" action="{{ path('admin_people_onboarding') }}" class="filter">
+            <span class="text-muted">Show</span>
+            {% for s in all_statuses %}
+                <label><input type="checkbox" name="s[]" value="{{ s }}"{{ s in statuses ? ' checked' }}> {{ s }}</label>
+            {% endfor %}
+            <button type="submit" class="btn btn-secondary">Apply</button>
+            <a class="export" href="{{ path('admin_people_onboarding_export', {status: filter}) }}">Export CSV ({{ rows|length }} row{{ rows|length == 1 ? '' : 's' }})</a>
+        </form>
+
+        <div class="card">
+            <div class="card-header">Signups · {{ filter }}</div>
+            <div class="table-responsive">
+                <table class="table table-sm table-dense mb-0">
+                    <thead>
+                        <tr>
+                            <th>Signed up</th>
+                            <th>Email</th>
+                            <th>Name</th>
+                            <th>Platform</th>
+                            <th>Availability</th>
+                            <th>Updates</th>
+                            <th>Source</th>
+                            <th>Status</th>
+                            <th>Invited</th>
+                            <th>Registered</th>
+                            <th class="wrap">Notes</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                            {% set s = row.signup %}
+                            {% set state = {new: 'state-warn', invited: 'state-ok', registered: 'state-ok', declined: 'state-muted', withdrawn: 'state-muted'} %}
+                            <tr>
+                                <td>{{ s.createdAt|clock }}</td>
+                                <td>{% if s.status.value == 'withdrawn' %}<span class="text-muted">scrubbed</span>{% else %}<a href="mailto:{{ s.email }}">{{ s.email }}</a>{% endif %}</td>
+                                <td>{{ s.name ?? '—' }}</td>
+                                <td>{{ s.platform.value }}</td>
+                                <td>{{ s.availability.value }}</td>
+                                <td>{{ s.updatesOptIn ? 'yes' : 'no' }}</td>
+                                <td><code>{{ s.source ?? '—' }}</code></td>
+                                <td><span class="state {{ state[s.status.value] ?? 'state-muted' }}">{{ s.status.value }}</span></td>
+                                <td>
+                                    {{ s.invitedAt|clock }}
+                                    {% if s.invitedBy %}<span class="by">by {{ s.invitedBy.email ?? s.invitedBy.id|short_id }}</span>{% endif %}
+                                </td>
+                                <td>
+                                    {{ s.registeredAt|clock }}
+                                    {% if s.user %}<span class="by"><a href="{{ path('admin_participant', {id: s.user.id}) }}">participant</a></span>{% endif %}
+                                </td>
+                                <td class="notes">
+                                    {% if s.status.value == 'withdrawn' %}
+                                        <span class="text-muted">—</span>
+                                    {% else %}
+                                        <form method="post" action="{{ path('admin_people_onboarding_notes', {id: s.id}) }}">
+                                            <input type="hidden" name="_token" value="{{ token }}">
+                                            <input type="hidden" name="filter" value="{{ filter }}">
+                                            <textarea name="notes" rows="1" placeholder="operator note">{{ s.notes ?? '' }}</textarea>
+                                            <button type="submit" class="btn">Save</button>
+                                        </form>
+                                    {% endif %}
+                                </td>
+                                <td class="actions">
+                                    {% if s.status.value == 'new' %}
+                                        <span class="pair">
+                                            <a class="btn btn-invite" href="{{ row.mailto }}" title="Opens your mail client with the invitation text prefilled">Invite</a>
+                                            <form method="post" action="{{ path('admin_people_onboarding_invite', {id: s.id}) }}">
+                                                <input type="hidden" name="_token" value="{{ token }}">
+                                                <input type="hidden" name="filter" value="{{ filter }}">
+                                                <button type="submit" class="btn" title="Sets invited_at and invited_by; do this after the mail went out">Mark invited</button>
+                                            </form>
+                                        </span>
+                                    {% elseif s.status.value == 'invited' %}
+                                        <a class="btn btn-invite" href="{{ row.mailto }}" title="Opens your mail client with the invitation text prefilled">Invite again</a>
+                                    {% endif %}
+                                    {% if s.status.value in ['new', 'invited'] %}
+                                        <form method="post" action="{{ path('admin_people_onboarding_decline', {id: s.id}) }}">
+                                            <input type="hidden" name="_token" value="{{ token }}">
+                                            <input type="hidden" name="filter" value="{{ filter }}">
+                                            <button type="submit" class="btn">Decline</button>
+                                        </form>
+                                    {% endif %}
+                                    {% if s.status.value in ['new', 'invited', 'declined'] %}
+                                        <form method="post" action="{{ path('admin_people_onboarding_withdraw', {id: s.id}) }}" data-confirm="Withdraw {{ s.email }}? Email, name and notes are scrubbed in place and cannot be recovered.">
+                                            <input type="hidden" name="_token" value="{{ token }}">
+                                            <input type="hidden" name="filter" value="{{ filter }}">
+                                            <button type="submit" class="btn btn-withdraw">Withdraw</button>
+                                        </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="12" class="text-muted">No signups in this filter.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <p class="text-muted small mt-2 mb-0">Invite opens a <code>mailto:</code> with the text from <code>templates/join/invitation.txt.twig</code>; two bracketed fields in it (expected time, data recorded) are yours to fill before sending. Mark invited is the status change, because a sent mail cannot be seen from here. Withdraw scrubs email, name and notes in place and keeps the dates. Rows past the retention window are scrubbed by <code>app:beta:purge --apply</code>.</p>
+    </div>
+{% endblock %}

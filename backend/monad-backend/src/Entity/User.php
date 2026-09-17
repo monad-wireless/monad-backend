@@ -52,6 +52,22 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $deletedAt = null;
 
+    /**
+     * IP-157 notification preferences. `general` is on once the OS permission is granted;
+     * `callouts` is OFF until the user opts in inside the app, because a quest callout is
+     * promotional content under App Store Review Guideline 4.5.4 and Google Play's notification
+     * policy. Both are also switchable off in the app; the push sender reads them per type.
+     */
+    #[ORM\Column(name: 'notify_general', type: 'boolean', options: ['default' => true])]
+    private bool $notifyGeneral = true;
+
+    #[ORM\Column(name: 'notify_callouts', type: 'boolean', options: ['default' => false])]
+    private bool $notifyCallouts = false;
+
+    /** `beta` when the account registered against a beta_signups row, else NULL (IP-157). */
+    #[ORM\Column(length: 16, nullable: true)]
+    private ?string $cohort = null;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -271,6 +287,42 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function isDeleted(): bool
     {
         return $this->status === UserStatus::DELETED;
+    }
+
+    public function isNotifyGeneral(): bool
+    {
+        return $this->notifyGeneral;
+    }
+
+    public function setNotifyGeneral(bool $notifyGeneral): static
+    {
+        $this->notifyGeneral = $notifyGeneral;
+
+        return $this;
+    }
+
+    public function isNotifyCallouts(): bool
+    {
+        return $this->notifyCallouts;
+    }
+
+    public function setNotifyCallouts(bool $notifyCallouts): static
+    {
+        $this->notifyCallouts = $notifyCallouts;
+
+        return $this;
+    }
+
+    public function getCohort(): ?string
+    {
+        return $this->cohort;
+    }
+
+    public function setCohort(?string $cohort): static
+    {
+        $this->cohort = $cohort;
+
+        return $this;
     }
 
     public function softDelete(): static

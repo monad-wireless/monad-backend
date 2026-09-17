@@ -20,6 +20,8 @@
         <span><span class="k">Users</span>{{ counts.users }} ({{ counts.admins }} admin{{ counts.admins == 1 ? '' : 's' }})</span>
         <span><span class="k">Quests</span>{{ counts.quests }} <a href="{{ path('admin_lab_arming') }}">arming</a></span>
         <span><span class="k">Nodes</span>{{ counts.devices }}</span>
+        {% set placement_mismatch = placement_mismatch_count() %}
+        <span><span class="k">Placements</span>{% if placement_mismatch > 0 %}<span class="state state-bad">{{ placement_mismatch }} named, not mirrored</span>{% else %}<span class="state state-ok">mirror agrees</span>{% endif %} <a href="{{ path('admin_lab_placements') }}">board</a></span>
         <span><span class="k">Handsets</span>{{ counts.handsets }}</span>
         <span><span class="k">Scans</span>{{ counts.scans }}{% if counts.conflicts > 0 %}, <span class="state state-bad">{{ counts.conflicts }} conflicts (E3)</span>{% endif %}</span>
     </div>

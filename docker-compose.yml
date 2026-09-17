@@ -25,7 +25,7 @@ services:
       context: ./backend/monad-backend
       dockerfile: Dockerfile
     container_name: monad_symfony
-    environment:
+    environment: &symfony_environment
       APP_ENV: ${APP_ENV}
       APP_SECRET: ${APP_SECRET}
       DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?serverVersion=16&charset=utf8"
@@ -60,6 +60,31 @@ services:
         condition: service_healthy
     working_dir: /var/www/html
     command: sh -c "composer install --no-interaction && (php bin/console lexik:jwt:generate-keypair --skip-if-exists || true) && php -S 0.0.0.0:8000 -t public"
+
+  # IP-157 — the Messenger worker (push sends over the `async` Doctrine transport, and the
+  # scheduler that runs app:notifications:dispatch-due every minute). Same build, same
+  # environment and the same source bind-mount as `symfony`, so it sees the vendor/ that
+  # service's `composer install` produced; it waits for that service to be up before starting.
+  # Without this container a "send now" writes the inbox rows and leaves every push `queued`.
+  worker:
+    build:
+      context: ./backend/monad-backend
+      dockerfile: Dockerfile
+    container_name: monad_worker
+    environment: *symfony_environment
+    volumes:
+      - ./backend/monad-backend:/var/www/html
+      - symfony_var:/var/www/html/var
+    networks:
+      - monad_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      symfony:
+        condition: service_started
+    working_dir: /var/www/html
+    entrypoint: ["sh", "-c"]
+    command: ["until [ -f vendor/autoload.php ]; do sleep 2; done; exec php bin/console messenger:consume scheduler_default async --time-limit=3600 --memory-limit=256M"]
 
 volumes:
   postgres_data:
