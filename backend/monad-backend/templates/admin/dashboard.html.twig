@@ -25,15 +25,24 @@
         <h2>Live quests<span class="more"><a href="{{ path('admin_lab_quests') }}">All quests</a></span></h2>
         {% set rows = [] %}
         {% for q in live_quests %}
-            {% set counts = quest_runs[q.id] ?? {today: 0, total: 0} %}
+            {# `q.id` is a UuidV4 OBJECT and `quest_runs` is keyed by the RFC 4122 STRING
+               (QuestEnrollmentRepository::countsForQuests casts it). PHP 8.3 throws on a
+               non-int, non-string array offset, so `quest_runs[q.id]` was a 500 on this
+               page — the whole Overview — the moment one quest was live. `??` does not
+               catch it: the offset is evaluated before the coalesce. #}
+            {# `runs`, NOT `counts`. A Twig `set` inside a `for` outlives the loop, and `counts`
+               is the controller's totals block, read at "Totals" below — so this name shadowed
+               it and the page died there instead. That defect was invisible while the offset
+               above threw first. #}
+            {% set runs = quest_runs[q.id.toRfc4122()] ?? {today: 0, total: 0} %}
             {% set rows = rows|merge([{
                 href: path('admin_lab_quests_edit', {id: q.id}),
                 cells: [
                     q.name|e,
                     ui.state(q.audience, q.audience == 'operator' ? 'muted' : 'ok'),
                     q.availableTo is null ? '<span class="state state-muted">never closes</span>' : ui.clock(q.availableTo),
-                    counts.today,
-                    counts.total,
+                    runs.today,
+                    runs.total,
                 ]
             }]) %}
         {% endfor %}
