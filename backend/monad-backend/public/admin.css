@@ -811,6 +811,43 @@ pre.json {
 .matrix td.cell { text-align: center; }
 .matrix td.cell .why { display: block; font-size: 0.68rem; color: var(--ink-45); text-transform: none; }
 
+/*
+ * THE ARMING MATRIX SCROLLS SIDEWAYS, AND MUST SAY SO. Five fact columns plus one per node is
+ * seventeen columns against a 1430px card, so the table has always been wider than its
+ * container. Two things made that unreadable when /admin went public on 2026-09-18.
+ *
+ * macOS draws OVERLAY scrollbars, which are invisible until something scrolls, so the container
+ * offered no affordance whatsoever: the table ended in a hard cut at the card edge and nothing
+ * on the page said the node columns continued past it. Styling ::-webkit-scrollbar opts this
+ * container out of overlay scrollbars, so the bar is always drawn and always takes its space.
+ *
+ * And the quest name scrolled away with everything else. At full scroll it sat at x = -181, so
+ * a reader looking at monad09 could no longer tell which quest the row belonged to — which is
+ * the one thing a matrix must never lose. The first column is pinned.
+ */
+.matrix-wrap { overflow-x: auto; }
+.matrix-wrap::-webkit-scrollbar { height: 12px; }
+.matrix-wrap::-webkit-scrollbar-track { background: var(--paper-sunk); }
+.matrix-wrap::-webkit-scrollbar-thumb { background: var(--rule-strong); border: 3px solid var(--paper-sunk); }
+.matrix-wrap::-webkit-scrollbar-thumb:hover { background: var(--ink-45); }
+
+/* The divider is a box-shadow, not a border: under `border-collapse: collapse` a border on a
+   sticky cell is owned by the collapsed grid and does not travel with the cell. */
+.matrix th:first-child,
+.matrix td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  box-shadow: inset -1px 0 0 var(--rule-strong);
+}
+.matrix tbody td:first-child { z-index: 1; }
+/* The corner outranks both, or whichever it scrolls under paints over it. */
+.matrix thead th:first-child { z-index: 3; background: var(--paper-sunk); }
+/* The row hover lives on `tr`, which an opaque sticky cell would hide. */
+.matrix tbody tr:hover td:first-child { background: #f3f8fa; }
+
+.matrix td.window { white-space: nowrap; }
+
 /* Bootstrap spacing utilities the reading pages use, kept so those templates still lay out
    correctly inside this shell without being rewritten (they belong to later lanes). */
 .mb-0 { margin-bottom: 0 !important; }
@@ -875,8 +912,21 @@ pre.json {
 
 /* Shared interaction layer: visible focus, consistent toolbars, readable data tables. */
 :focus-visible { outline: 2px solid var(--signal-ink); outline-offset: 3px; }
-.mc-skip { position: fixed; left: 1rem; top: -5rem; padding: .8rem; background: white; z-index: 100; }
-.mc-skip:focus { top: 1rem; }
+/* The skip link is a BANNER, not a floating chip. It used to park itself at left:1rem top:1rem
+   on focus — exactly on top of the wordmark — in an opaque white box narrower than the rail, so
+   the brand vanished and the tail of "MonadCount" stuck out beside it, which reads as a
+   rendering fault rather than a control. Full width, solid signal ink, flush with the top edge:
+   it now covers the whole rail head while focused and is unmistakably deliberate. */
+.mc-skip {
+  position: fixed;
+  left: 0; right: 0; top: -5rem;
+  padding: 0.85rem 1.25rem;
+  background: var(--signal-ink); color: #fff;
+  font-weight: 600; text-decoration: none;
+  z-index: 100;
+}
+.mc-skip:focus { top: 0; }
+.mc-skip:focus-visible { outline: 2px solid #fff; outline-offset: -6px; }
 .mc-crumb:empty { display: none; }
 .mc-top { align-items: center; min-height: 88px; }
 .mc-top h1 { font-size: 1.65rem; }

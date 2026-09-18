@@ -5,7 +5,6 @@ namespace App\Controller\Admin;
 use App\Entity\Device;
 use App\Fleet\FleetMetricsReader;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
-use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -28,7 +27,6 @@ final class LabController extends AbstractController
 {
     public function __construct(
         private readonly FleetMetricsReader $fleet,
-        private readonly AdminUrlGenerator $adminUrls,
     ) {
     }
 
@@ -37,7 +35,6 @@ final class LabController extends AbstractController
     {
         return $this->render('admin/lab.html.twig', [
             'fleet' => $this->fleet->snapshot(),
-            'devices_url' => $this->adminUrls->setController(DeviceCrudController::class)->setAction('index')->generateUrl(),
         ]);
     }
 }

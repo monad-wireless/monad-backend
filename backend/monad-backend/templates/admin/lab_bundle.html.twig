@@ -1,8 +1,12 @@
 {% extends '@EasyAdmin/page/content.html.twig' %}
 
+{% block breadcrumb %}<a href="{{ path('admin_lab') }}">Lab</a> / Bundle{% endblock %}
+
 {% block content_title %}Lab bundle{% endblock %}
 
 {% block main %}
+    {{ include('admin/_lab_tabs.html.twig', {active: 'Bundle'}) }}
+
     <p class="text-muted">
         Exactly what <code>GET /api/lab/config</code> serves to the handsets. Read-only here: the bundle is
         rendered by Ansible from inventory (<code>roles/monad_api</code>, <code>lab.json.j2</code>) and

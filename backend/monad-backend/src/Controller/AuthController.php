@@ -247,7 +247,8 @@ class AuthController extends AbstractController
         content: new OA\JsonContent(
             properties: [
                 new OA\Property(property: 'email', type: 'string', format: 'email', example: 'user@example.com', description: 'User email address'),
-                new OA\Property(property: 'name', type: 'string', example: 'John Doe', nullable: true, description: 'User full name')
+                new OA\Property(property: 'name', type: 'string', example: 'John Doe', nullable: true, description: 'User full name'),
+                new OA\Property(property: 'is_operator', type: 'boolean', example: false, description: 'May this account reach the operator surfaces (lab console, operator takes)? True for ROLE_SUPERADMIN.')
             ]
         )
     )]
@@ -271,7 +272,21 @@ class AuthController extends AbstractController
 
         return $this->json([
             'email' => $user->getEmail(),
-            'name' => $user->getName()
+            'name' => $user->getName(),
+            // Whether this account may see the operator half of the app: the lab console, the
+            // walk console, the instrument panels and the operator takes on the board.
+            //
+            // A capability, not the role string. The app needs one boolean to decide what to
+            // draw, and publishing `roles` instead would make every future role a wire change
+            // in two repositories. It reuses ROLE_SUPERADMIN, which is already what
+            // `QuestController::list()` filters operator quests on and what gates /admin and
+            // /mcp — so "may walk an operator take" and "may administer the lab" stay the same
+            // grant, and an operator take still cannot be delegated to a student helper.
+            //
+            // This is NOT the authorization. Every operator surface that touches the server is
+            // gated server-side on its own; this field only stops the app drawing doors that
+            // would be refused.
+            'is_operator' => $this->isGranted('ROLE_SUPERADMIN'),
         ]);
     }
 }

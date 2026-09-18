@@ -44,6 +44,9 @@ class DeviceCrudController extends AbstractCrudController
         return $crud
             ->setEntityLabelInSingular('Device')
             ->setEntityLabelInPlural('Devices (fleet)')
+            // The register is the Lab section's "Devices" tab; the override adds that section's
+            // tab bar and nothing else, so the index keeps EasyAdmin's search, sort and filters.
+            ->overrideTemplate('crud/index', 'admin/device_index.html.twig')
             ->setDefaultSort(['slug' => 'ASC'])
             ->setSearchFields(['slug', 'label', 'location', 'siteRef'])
             ->setHelp(

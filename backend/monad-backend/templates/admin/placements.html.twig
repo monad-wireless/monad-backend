@@ -2,9 +2,13 @@
 
 {# The placement board (IP-157 Phase 3). One table, verdicts as words, three hues. #}
 
+{% block breadcrumb %}<a href="{{ path('admin_lab') }}">Lab</a> / Markers{% endblock %}
+
 {% block content_title %}Placement board{% endblock %}
 
 {% block main %}
+    {{ include('admin/_lab_tabs.html.twig', {active: 'Markers'}) }}
+
     <p class="text-muted small">
         Every marker card and fleet node the mirror knows for this floor, where PostGIS says it stands, and whether
         a live quest names it. <strong>matched</strong>: named by a live quest and present. <strong>spare</strong>: present,

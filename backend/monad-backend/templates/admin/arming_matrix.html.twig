@@ -1,8 +1,12 @@
 {% extends '@EasyAdmin/page/content.html.twig' %}
 
+{% block breadcrumb %}<a href="{{ path('admin_lab') }}">Lab</a> / Arming{% endblock %}
+
 {% block content_title %}Arming matrix{% endblock %}
 
 {% block main %}
+    {{ include('admin/_lab_tabs.html.twig', {active: 'Arming'}) }}
+
     <p class="text-muted small">
         One row per quest, one column per node — every node, inactive ones included. A cell says two independent
         things: whether the quest is <strong>armed</strong> at that node (empty arming means every node), and
@@ -13,7 +17,10 @@
     </p>
 
     <div class="card">
-        <div class="table-responsive">
+        {# `matrix-wrap` is what admin.css hangs the sideways-scroll affordance on: five fixed
+           columns plus one per node never fit a screen, and macOS draws an overlay scrollbar
+           that says so only after you have already guessed. #}
+        <div class="table-responsive matrix-wrap">
             <table class="table table-sm table-dense matrix mb-0">
                 <thead>
                     <tr>
@@ -30,7 +37,10 @@
                         <tr>
                             <td><a href="{{ path('admin_quest_analytics', {id: row.id}) }}">{{ row.name }}</a>{% if row.produces_measurement %} <span class="state state-muted">measures</span>{% endif %}</td>
                             <td>{{ row.audience }}</td>
-                            <td class="wrap"><small>{{ row.available_from ? row.available_from|date('Y-m-d H:i') : '—' }} → {{ row.available_to ? row.available_to|date('Y-m-d H:i') : 'open' }}</small></td>
+                            {# A window is two instants, and an instant is atomic. `wrap` let the
+                               cell break `2026-08-13 12:00` across four lines once the node
+                               columns squeezed it to 76px, which made every row 151px tall. #}
+                            <td class="window"><small>{{ row.available_from ? row.available_from|date('Y-m-d H:i') : '—' }} → {{ row.available_to ? row.available_to|date('Y-m-d H:i') : 'open' }}</small></td>
                             <td class="wrap"><small>{{ row.recurrence ? row.recurrence|json_encode : 'unlimited' }}</small></td>
                             <td class="wrap"><small>{{ row.required_capabilities|join(' ') ?: '—' }}</small></td>
                             {% for cell in row.devices %}

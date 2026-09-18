@@ -1,5 +1,11 @@
 {% extends '@EasyAdmin/page/content.html.twig' %}
 
+{# /admin/quests/analytics does not sit under /admin/lab/quests, so the layout's longest-prefix
+   match finds no rail entry and nothing is marked. Name the owning section explicitly, the way
+   the per-quest page already does. #}
+{% set mc_active = 'admin_lab_quests' %}
+{% block breadcrumb %}<a href="{{ path('admin_lab_quests') }}">Quests</a> / Analytics{% endblock %}
+
 {% block content_title %}Quest analytics{% endblock %}
 
 {% block main %}
