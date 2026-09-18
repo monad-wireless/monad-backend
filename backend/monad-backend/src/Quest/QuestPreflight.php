@@ -118,6 +118,17 @@ final class QuestPreflight
             if ($type === QuestStepType::START) {
                 $features = (array) ($config['features'] ?? []);
                 $broadcastDeclared = ($features['broadcast'] ?? false) === true;
+
+                // A session-scoped broadcast needs the same handset capability a `ble_advertise`
+                // step needs, and for the same physical reason: the phone has to hold the
+                // peripheral role. Deriving it only from the step type was the gap — a quest whose
+                // ONLY radio role is `features.broadcast` (Counting) therefore declared no
+                // capabilities at all and was offered to handsets that cannot broadcast. Those runs
+                // record their readings with nothing on air, so every one of them is a number with
+                // no position, and nothing downstream can tell that from a quiet fleet.
+                if ($broadcastDeclared) {
+                    $capabilities[] = 'ble.advertise';
+                }
             }
         }
 

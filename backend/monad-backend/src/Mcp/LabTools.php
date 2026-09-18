@@ -439,6 +439,12 @@ class LabTools
             To open it later:           available_from = "2026-09-01T06:00:00+00:00"
             To arm or disarm points:    points = 120   /   points = 0
             To scope it to operators:   audience = "operator"   (or "public" to un-scope)
+            To RENAME one:              new_name = "Counting"
+
+            The name is what a participant reads in the catalogue, so a retired generation must be
+            renamed out of the way BEFORE the live one takes the bare name. Every other tool here
+            finds a quest by name, so a duplicate name makes `lab_quest_read` ambiguous: this
+            refuses one rather than creating it.
 
             Dates are anything PHP's DateTime parses: "now", "+2 weeks", an ISO timestamp. The
             literal "never" is the one special value and it clears available_to.
@@ -449,6 +455,7 @@ class LabTools
     )]
     public function questUpdate(
         string $name,
+        ?string $new_name = null,
         ?string $available_from = null,
         ?string $available_to = null,
         ?float $points = null,
@@ -462,6 +469,37 @@ class LabTools
         }
 
         $changed = [];
+
+        // Applied before anything else, because it is the one field that can be refused for a
+        // reason outside this quest. Doing it first means a refusal leaves the row exactly as it
+        // was, rather than half-updated with a window nobody asked to move.
+        //
+        // Renaming is here rather than on `lab_quest_write` for the reason the audience is: a
+        // write replaces the step rows a completion points at, so it is unusable on any quest
+        // somebody has already run — which is every quest worth renaming.
+        if ($new_name !== null) {
+            $trimmed = trim($new_name);
+            if ($trimmed === '') {
+                return ['error' => 'new_name cannot be blank.'];
+            }
+            if (mb_strlen($trimmed) > 255) {
+                return ['error' => 'new_name cannot be longer than 255 characters.'];
+            }
+            if ($trimmed !== $name) {
+                $taken = $this->entityManager->getRepository(Quest::class)->findOneBy(['name' => $trimmed]);
+                if ($taken !== null) {
+                    return ['error' => sprintf(
+                        'A quest named "%s" already exists (%s). Rename that one out of the way first: '
+                        . 'every tool here finds a quest by name, so two rows sharing one makes the '
+                        . 'other reads ambiguous.',
+                        $trimmed,
+                        self::describeWindow($taken),
+                    )];
+                }
+                $quest->setName($trimmed);
+                $changed['name'] = $trimmed;
+            }
+        }
 
         if ($available_from !== null) {
             try {
@@ -536,7 +574,9 @@ class LabTools
         $this->entityManager->flush();
 
         return [
-            'updated' => $name,
+            // The name as it stands after the call. A receipt that echoed the lookup name would
+            // report the old one on the single call where the name is what changed.
+            'updated' => $quest->getName(),
             'changed' => $changed,
             'status' => self::describeWindow($quest),
             'note' => 'Steps, enrolments and step completions untouched.',

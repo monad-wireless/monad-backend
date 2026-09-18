@@ -140,6 +140,27 @@ final class QuestPreflightTest extends TestCase
         );
     }
 
+    /**
+     * The Counting quest's whole radio role is `features.broadcast`: no advertise step, no probe.
+     * Deriving the capability from the step type alone left it declaring nothing, so a handset
+     * that cannot hold the peripheral role was offered it and recorded counts with no position.
+     */
+    public function testASessionScopedBroadcastNeedsTheAdvertiseCapability(): void
+    {
+        self::assertSame(['ble.advertise'], $this->capabilities([
+            self::start(true),
+            ['name' => 'Count', 'type' => 'observe', 'config' => ['prompt' => 'How many?', 'min_readings' => 5]],
+        ]));
+    }
+
+    public function testAQuestThatNeverGoesOnAirNeedsNoAdvertiseCapability(): void
+    {
+        self::assertSame([], $this->capabilities([
+            self::start(false),
+            ['name' => 'Count', 'type' => 'observe', 'config' => ['prompt' => 'How many?', 'min_readings' => 5]],
+        ]));
+    }
+
     public function testCapabilitiesAreDeduplicatedAcrossSteps(): void
     {
         self::assertSame(['ble.advertise', 'camera.qr'], $this->capabilities([
