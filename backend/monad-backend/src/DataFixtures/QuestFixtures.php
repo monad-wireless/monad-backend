@@ -39,8 +39,8 @@ class QuestFixtures extends Fixture implements DependentFixtureInterface
             "Use your phone's Bluetooth to detect each beacon and complete this exciting indoor adventure!\n\n" .
             "Good luck, explorer!"
         );
-        $quest->setAvailableFrom(new \DateTime('2025-01-01 00:00:00'));
-        $quest->setAvailableTo(new \DateTime('2025-12-31 23:59:59'));
+        $quest->setAvailableFrom(new \DateTime('-1 day'));
+        $quest->setAvailableTo(new \DateTime('+2 years'));
         $quest->setPoints(150.0);
         $quest->setEstimatedDuration(45);
         $quest->setCreatedBy($createdBy);
@@ -153,8 +153,8 @@ class QuestFixtures extends Fixture implements DependentFixtureInterface
             "Use your phone's Bluetooth to detect the beacon at each location!\n\n" .
             "Good luck, explorer!"
         );
-        $quest->setAvailableFrom(new \DateTime('2025-01-01 00:00:00'));
-        $quest->setAvailableTo(new \DateTime('2025-12-31 23:59:59'));
+        $quest->setAvailableFrom(new \DateTime('-1 day'));
+        $quest->setAvailableTo(new \DateTime('+2 years'));
         $quest->setPoints(150.0);
         $quest->setEstimatedDuration(45);
         $quest->setCreatedBy($createdBy);

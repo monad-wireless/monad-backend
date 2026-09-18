@@ -1,0 +1,115 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% import 'admin/_macros.html.twig' as m %}
+
+{% block content_title %}Recording session {{ session.shortId }}{% endblock %}
+
+{% block main %}
+    <div class="strip">
+        <span><span class="k">Session</span><code>{{ session.id }}</code></span>
+        <span><span class="k">Participant</span><code>{{ session.participantId }}</code>
+            {% if session.user %}<a href="{{ path('admin_participant', {id: session.user.id}) }}">{{ session.user.email }}</a>{% endif %}</span>
+        <span><span class="k">Uploaded</span>{{ session.firstArtefactAt|clock }}</span>
+        <span><span class="k">State</span>
+            {% if session.complete %}<span class="state state-ok">complete</span> {{ session.completedAt|clock }}{% else %}<span class="state state-warn">no sidecar</span>{% endif %}
+            {% if session.interruptedReason %}<span class="state state-bad">interrupted: {{ session.interruptedReason }}</span>{% endif %}
+        </span>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card mb-3">
+                <div class="card-header">Run</div>
+                <table class="table table-sm table-dense table-facts mb-0">
+                    <tbody>
+                        <tr><th>Quest</th><td>{% if session.quest %}<a href="{{ path('admin_quest_analytics', {id: session.quest.id}) }}">{{ session.quest.name }}</a>{% else %}—{% endif %}</td></tr>
+                        <tr><th>Enrollment</th><td>{% if session.enrollment %}<a href="{{ path('admin_enrollment', {id: session.enrollment.id}) }}">{{ session.enrollment.id }}</a> ({{ m.state(session.enrollment.status) }}){% else %}<span class="text-muted">not resolved — the sidecar names none, or names one this database does not hold</span>{% endif %}</td></tr>
+                        <tr><th>Handset</th><td>{% if session.handset %}<a href="{{ path('admin_handset', {id: session.handset.id}) }}">{{ session.handset.displayName }}</a>{% else %}{{ (session.platform ~ ' ' ~ session.machine)|trim ?: '—' }} <span class="text-muted">(no handset row)</span>{% endif %}</td></tr>
+                        <tr><th>Build</th><td><code>{{ session.buildId ?? '—' }}</code></td></tr>
+                        <tr><th>Site</th><td><code>{{ session.site ?? '—' }}</code></td></tr>
+                        <tr><th>Roles</th><td>{{ session.roles|join(', ') ?: '—' }}</td></tr>
+                        <tr><th>Started</th><td>{{ session.startedAt|clock }}</td></tr>
+                        <tr><th>Ended</th><td>{{ session.endedAt|clock }}</td></tr>
+                        <tr><th>Duration</th><td>{{ session.durationSeconds|duration }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card mb-3">
+                <div class="card-header">Artefacts</div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-dense mb-0">
+                        <thead><tr><th>File</th><th class="num">Bytes</th><th>Type</th><th>Transport</th><th>Stored</th><th></th></tr></thead>
+                        <tbody>
+                            {% for filename, a in session.artefacts %}
+                                <tr>
+                                    <td><code>{{ filename }}</code></td>
+                                    <td class="num">{{ (a.bytes ?? 0)|bytes }}</td>
+                                    <td>{{ a.content_type ?? '—' }}</td>
+                                    <td>{{ a.transport ?? '—' }}</td>
+                                    <td>{{ a.stored_at is defined and a.stored_at ? a.stored_at|date('Y-m-d H:i:s') ~ ' UTC' : '—' }}</td>
+                                    <td>{% if downloads[filename] is defined and downloads[filename] %}<a href="{{ downloads[filename] }}">download</a>{% else %}<span class="text-muted">link unavailable</span>{% endif %}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="6" class="text-muted">No artefacts recorded.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-body pt-2 pb-2">
+                    <p class="text-muted small mb-0">Download links are presigned for fifteen minutes. <code>listed</code> means the entry came from the S3 listing during backfill, which cannot tell a whole upload from a multipart one.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">The walk</div>
+        <div class="card-body">
+            {{ m.figures(figures, session.id) }}
+        </div>
+    </div>
+
+    {% if sidecar_blocks is empty %}
+        <div class="card mb-3">
+            <div class="card-header">Sidecar</div>
+            <div class="card-body"><p class="text-muted small mb-0">No <code>metadata.json</code> for this session. The streams above are all that arrived.</p></div>
+        </div>
+    {% else %}
+        <div class="row">
+            {% for block in sidecar_blocks %}
+                <div class="col-lg-6">
+                    <div class="card mb-3">
+                        <div class="card-header">sidecar · {{ block.name }}</div>
+                        <div class="table-responsive">{{ m.facts(block.rows) }}</div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="card mb-3">
+        <div class="card-header">Ground truth naming this recording</div>
+        <div class="table-responsive">
+            <table class="table table-sm table-dense mb-0">
+                <thead><tr><th>Received</th><th>Ground-truth session</th><th>Zone</th><th>Direction</th><th>Participant token</th><th class="num">mono_ns</th></tr></thead>
+                <tbody>
+                    {% for scan in scans %}
+                        <tr>
+                            <td>{{ scan.receivedAt|clock }}</td>
+                            <td><a href="{{ path('admin_lab_session', {labSessionId: scan.labSessionId}) }}"><code>{{ scan.labSessionId }}</code></a></td>
+                            <td><code>{{ scan.zoneId }}</code></td>
+                            <td>{{ scan.direction.value }}</td>
+                            <td><code>{{ scan.participantToken }}</code></td>
+                            <td class="num">{{ scan.monoNs }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="6" class="text-muted">No scan carries this recording session id.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {{ m.walk_info_script() }}
+{% endblock %}

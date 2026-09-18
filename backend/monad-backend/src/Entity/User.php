@@ -52,6 +52,22 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $deletedAt = null;
 
+    /**
+     * IP-157 notification preferences. `general` is on once the OS permission is granted;
+     * `callouts` is OFF until the user opts in inside the app, because a quest callout is
+     * promotional content under App Store Review Guideline 4.5.4 and Google Play's notification
+     * policy. Both are also switchable off in the app; the push sender reads them per type.
+     */
+    #[ORM\Column(name: 'notify_general', type: 'boolean', options: ['default' => true])]
+    private bool $notifyGeneral = true;
+
+    #[ORM\Column(name: 'notify_callouts', type: 'boolean', options: ['default' => false])]
+    private bool $notifyCallouts = false;
+
+    /** `beta` when the account registered against a beta_signups row, else NULL (IP-157). */
+    #[ORM\Column(length: 16, nullable: true)]
+    private ?string $cohort = null;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -104,7 +120,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     }
 
     /**
+     * The EFFECTIVE roles, for the security layer only.
+     *
+     * ROLE_USER is appended on every read and is not stored, so this is a derived value and never
+     * a round-trippable one. Do not bind a form or an admin field to it: the admin's role editor
+     * did exactly that, rendered a ROLE_USER tick nobody had set, and then read the same synthetic
+     * value back as the "previous" state on save — which made every save look like a removal of a
+     * role that was never assigned. Use getAssignedRoles() for anything that edits or displays
+     * what this account actually holds.
+     *
      * @see UserInterface
+     *
+     * @return list<string>
      */
     public function getRoles(): array
     {
@@ -112,17 +139,51 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         // guarantee every user at least has ROLE_USER
         $roles[] = 'ROLE_USER';
 
-        return array_unique($roles);
+        return array_values(array_unique($roles));
+    }
+
+    /**
+     * The roles stored on this account, exactly as the database holds them.
+     *
+     * This is the pair the admin's role editor is bound to. It shows an empty set for a plain
+     * participant, because ROLE_USER is implicit and unstored, and an unticked ROLE_USER therefore
+     * stays unticked instead of reappearing on the next render.
+     *
+     * @return list<string>
+     */
+    public function getAssignedRoles(): array
+    {
+        return array_values($this->roles);
+    }
+
+    /**
+     * @param list<string> $roles
+     */
+    public function setAssignedRoles(array $roles): static
+    {
+        return $this->setRoles($roles);
     }
 
     public function setRoles(array $roles): static
     {
-        $this->roles = $roles;
+        // Reindexed: the column is JSON, and a gappy PHP array serialises as a JSON object rather
+        // than an array, which then reads back as something no in_array() caller expects.
+        $this->roles = array_values(array_unique($roles));
 
         return $this;
     }
 
-    public function addRole(UserRole $role): static
+    /**
+     * Deliberately NOT named addRole()/removeRole().
+     *
+     * Symfony's PropertyAccessor prefers a singular adder/remover pair over the setter whenever
+     * the value it is asked to write is a list, and it hands that pair whatever the form
+     * submitted. The admin's roles field submits strings, so an addRole(UserRole) pair turned
+     * every save into "Expected argument of type App\Enum\UserRole, string given at property
+     * path roles" — a 500 on user create and on any role edit. Named out of the inflector's way,
+     * the accessor falls back to setRoles(array), which is what the form should have been using.
+     */
+    public function grantRole(UserRole $role): static
     {
         if (!in_array($role->value, $this->roles, true)) {
             $this->roles[] = $role->value;
@@ -131,12 +192,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    public function removeRole(UserRole $role): static
+    public function revokeRole(UserRole $role): static
     {
-        $this->roles = array_filter(
+        $this->roles = array_values(array_filter(
             $this->roles,
             fn($r) => $r !== $role->value
-        );
+        ));
 
         return $this;
     }
@@ -226,6 +287,42 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function isDeleted(): bool
     {
         return $this->status === UserStatus::DELETED;
+    }
+
+    public function isNotifyGeneral(): bool
+    {
+        return $this->notifyGeneral;
+    }
+
+    public function setNotifyGeneral(bool $notifyGeneral): static
+    {
+        $this->notifyGeneral = $notifyGeneral;
+
+        return $this;
+    }
+
+    public function isNotifyCallouts(): bool
+    {
+        return $this->notifyCallouts;
+    }
+
+    public function setNotifyCallouts(bool $notifyCallouts): static
+    {
+        $this->notifyCallouts = $notifyCallouts;
+
+        return $this;
+    }
+
+    public function getCohort(): ?string
+    {
+        return $this->cohort;
+    }
+
+    public function setCohort(?string $cohort): static
+    {
+        $this->cohort = $cohort;
+
+        return $this;
     }
 
     public function softDelete(): static

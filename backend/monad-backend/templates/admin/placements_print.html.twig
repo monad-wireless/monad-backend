@@ -1,0 +1,47 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{# The print sheet (IP-157 Phase 3), moved from the retired /admin/lab/markers page. One figure per
+   mirrored CARD: matched cards render the exact string their live quest names, spare cards the
+   portal's /m/<key> grammar. Cut guides and print rules live in admin-placements.css. #}
+
+{% block content_title %}Marker sheet — {{ floor }}{% endblock %}
+
+{% block main %}
+    <p class="text-muted small no-print">
+        One card per mirrored placement of kind <code>card</code> on <code>{{ floor }}</code>
+        ({{ sheet|length }} of them; nodes carry fleet labels, not markers). A card named by a live quest prints
+        that quest's exact string; a spare card prints <code>https://monad.dubec.dev/m/&lt;key&gt;</code>. Cut along
+        the dashed line and tape at chest height.
+        {% if synced_at is null %}
+            <span class="state state-warn">never synced</span> — run <code>{{ export_command }}</code> then <code>lab_placements_write</code>.
+        {% else %}
+            Mirror synced {{ synced_at|ago }} ({{ synced_at|clock }}).
+        {% endif %}
+    </p>
+
+    <p class="no-print">
+        <button class="btn btn-primary" onclick="window.print()">Print sheet</button>
+        <a class="btn btn-secondary" href="{{ path('admin_lab_placements', {floor: floor}) }}">Back to the board</a>
+    </p>
+
+    {% if sheet is empty %}
+        <p class="text-muted">No card is mirrored for <code>{{ floor }}</code>.</p>
+    {% else %}
+        <div class="marker-sheet">
+            {% for card in sheet %}
+                <figure class="marker">
+                    <img src="{{ path('admin_lab_placements_marker_svg', {value: card.value}) }}" alt="{{ card.value }}">
+                    <figcaption>
+                        <div class="marker-label">{{ card.key }}</div>
+                        <div class="marker-room {{ card.room is null ? 'no-room' : '' }}">{{ card.room ?? '— no room' }}</div>
+                        <div class="marker-payload">{{ card.value }}</div>
+                        <div class="marker-verdict">{{ card.verdict }}</div>
+                        {% if card.quests is not empty %}
+                            <div class="marker-quests">{{ card.quests|join(' · ') }}</div>
+                        {% endif %}
+                    </figcaption>
+                </figure>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endblock %}

@@ -1,0 +1,151 @@
+/*
+ * The placement board and its print sheet (IP-157 Phase 3). Tokens come from admin.css; this
+ * file adds only what /admin/lab/placements and /admin/lab/placements/print need.
+ *
+ * Three hues, as everywhere: signal for a matched row, stale for a row that has no room or has
+ * never been synced, fault for a mismatch. A verdict is a word, never a coloured pill.
+ */
+
+/* ── the board ─────────────────────────────────────────────────────────────────────────────── */
+
+.placements-toolbar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.placements-toolbar input[type="search"] {
+  border: 1px solid var(--rule);
+  background: #fff;
+  color: var(--ink);
+  padding: 0.3rem 0.55rem;
+  font-size: 0.86rem;
+  min-width: 18rem;
+  border-radius: 0;
+}
+.placements-toolbar .count {
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+}
+.placements-toolbar form {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.placements-toolbar select {
+  border: 1px solid var(--rule);
+  background: #fff;
+  color: var(--ink);
+  padding: 0.25rem 0.45rem;
+  font-size: 0.86rem;
+  border-radius: 0;
+}
+
+.placements-table td.coord {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.placements-table .no-room {
+  color: var(--stale);
+  font-style: normal;
+}
+.placements-table tr.verdict-mismatch td {
+  color: var(--fault);
+}
+.placements-table tr[hidden] {
+  display: none;
+}
+.placements-table .quests a + a::before,
+.placements-table .quests span + span::before {
+  content: " · ";
+  color: var(--ink-muted);
+}
+
+.sync-hint code {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  background: var(--paper-sunk);
+  padding: 0 0.25rem;
+}
+
+.placements-section-toggle {
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--signal-ink);
+  font-size: 0.78rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0;
+  cursor: pointer;
+}
+.placements-section-toggle:hover { color: var(--signal); }
+
+/* ── the print sheet ───────────────────────────────────────────────────────────────────────── */
+
+.marker-sheet {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 18px;
+}
+.marker-sheet .marker {
+  border: 1px dashed var(--ink-muted);   /* the cut guide */
+  padding: 14px;
+  text-align: center;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin: 0;
+  background: #fff;
+}
+.marker-sheet .marker img {
+  width: 100%;
+  max-width: 190px;
+  height: auto;
+}
+.marker-sheet .marker-label {
+  font-weight: 700;
+  margin-top: 8px;
+}
+.marker-sheet .marker-room {
+  font-size: 0.86rem;
+}
+.marker-sheet .marker-room.no-room {
+  color: var(--stale);
+}
+.marker-sheet .marker-payload {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  word-break: break-all;
+}
+.marker-sheet .marker-quests {
+  font-size: 11px;
+  margin-top: 4px;
+  color: var(--ink-muted);
+}
+.marker-sheet .marker-verdict {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--ink-muted);
+}
+
+@media print {
+  .no-print,
+  #main-menu, #sidebar, header, .content-top, .content-header, .sidebar-wrapper, .navbar,
+  .placements-toolbar, .sync-hint {
+    display: none !important;
+  }
+  body, .content-wrapper, .wrapper, .main-content {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .marker-sheet {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10mm;
+  }
+  .marker-sheet .marker {
+    border-color: #000;
+  }
+  .marker-sheet .marker-room.no-room {
+    color: #000;
+  }
+}

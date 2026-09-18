@@ -3,7 +3,29 @@ framework:
     secret: '%env(APP_SECRET)%'
 
     # Note that the session will be started ONLY if you read or write from it.
-    session: true
+    #
+    # IP-157, revision 2026-09-17 — /admin is published over public HTTPS, so the session cookie
+    # that IS the operator's credential now travels the Internet. `auto` sets Secure whenever the
+    # request is https, which the trusted X-Forwarded-Proto above makes true behind nginx and
+    # false on the dev server, so one setting is correct in both places without a per-environment
+    # branch. `httponly` keeps the cookie out of `document.cookie`, and `lax` keeps it off
+    # cross-site POSTs — the CSRF token on the login form is the other half of that, not a
+    # substitute for it.
+    session:
+        cookie_secure: auto
+        cookie_httponly: true
+        cookie_samesite: lax
+
+    # IP-157 — /join is served as monad.dubec.dev/join through the site's nginx, which forwards
+    # `Host: monad.dubec.dev` and `X-Forwarded-Proto: https`. Without trusting the proxy the
+    # request scheme reads as http and every absolute URL on the form (and the CSRF cookie's
+    # Secure flag) is wrong. REMOTE_ADDR is safe here because the container binds
+    # 127.0.0.1:8084 on the host: every request reaches it through nginx or from a service on
+    # the shared `monad` bridge, and both are ours. No trusted_hosts: the API answers on
+    # api.monad.dubec.dev, monad.dubec.dev (/join) and the tailnet name, and a list here would
+    # 400 the next name someone adds in nginx.
+    trusted_proxies: '127.0.0.1,REMOTE_ADDR'
+    trusted_headers: ['x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-host', 'x-forwarded-port', 'x-forwarded-prefix']
 
     #esi: true
     #fragments: true

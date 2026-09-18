@@ -21,11 +21,17 @@ class QuestDetailResponseDto
     ) {
     }
 
-    public static function fromEntity(Quest $quest): self
+    /**
+     * @param bool $includeStepConfig include each step's `config`. Off by default:
+     *   `/api/quest/{id}` is PUBLIC_ACCESS (security.yaml), and step config carries
+     *   `expected_value` for `scan_qr` steps. The caller decides, from whether the
+     *   request authenticated, rather than this DTO guessing.
+     */
+    public static function fromEntity(Quest $quest, bool $includeStepConfig = false): self
     {
         $steps = [];
         foreach ($quest->getSteps() as $step) {
-            $steps[] = QuestStepDto::fromEntity($step);
+            $steps[] = QuestStepDto::fromEntity($step, $includeStepConfig);
         }
 
         return new self(

@@ -1,0 +1,156 @@
+/*
+ * The quest builder (IP-157, Phase 2). Rules for /admin/lab/quests only.
+ *
+ * On admin.css's tokens: --paper, --paper-sunk, --ink, --ink-muted, --rule, --signal,
+ * --signal-ink, --stale, --fault, --font-mono. Radius 0 everywhere, tables over cards, and the
+ * three semantic hues and nothing else: signal for what is fine, stale for what wants attention,
+ * fault for what is refused.
+ */
+
+/* ── index ──────────────────────────────────────────────────────────────────────────────── */
+
+.quests-index th.num,
+.quests-index td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.quests-index td.wrap { max-width: 24rem; }
+.quests-index td.actions { white-space: nowrap; font-size: 0.82rem; }
+.quests-index td.actions > * { margin-right: 0.6rem; }
+.quests-index td.actions form { margin: 0; }
+.quests-index td.actions button { border: 0; background: none; color: var(--link-color); padding: 0; font-size: inherit; }
+.quests-index td.actions button:hover { color: var(--link-hover-color); text-decoration: underline; }
+
+.quest-import textarea { font-size: 0.82rem; }
+
+/* ── preflight ──────────────────────────────────────────────────────────────────────────── */
+
+.preflight { list-style: none; padding: 0; margin: 0; font-size: 0.86rem; }
+.preflight li { padding: 0.35rem 0 0.35rem 0.85rem; border-left: 3px solid var(--rule); margin-bottom: 0.3rem; }
+.preflight li.warn { border-left-color: var(--stale); color: var(--ink); }
+.preflight li.ok { border-left-color: var(--signal); color: var(--ink-muted); }
+
+/* ── the step island ────────────────────────────────────────────────────────────────────── */
+
+.step-list { list-style: none; margin: 0 0 1rem; padding: 0; counter-reset: none; }
+.step-empty { color: var(--ink-muted); font-size: 0.88rem; padding: 0.75rem 0; }
+
+.step {
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  background: var(--paper);
+  margin-bottom: 0.5rem;
+}
+.step.dragging { opacity: 0.45; }
+.step.drop-target { border-color: var(--signal); box-shadow: inset 0 2px 0 var(--signal); }
+.step.step-invalid { border-left: 3px solid var(--fault); }
+
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--paper-sunk);
+  border-bottom: 1px solid var(--rule);
+}
+.step-order {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+  min-width: 1.5rem;
+  text-align: right;
+}
+.step-type {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--signal-ink);
+  white-space: nowrap;
+}
+.step-name { flex: 1 1 auto; min-width: 8rem; }
+.step-body { padding: 0.6rem; }
+
+.step-note { font-size: 0.82rem; color: var(--ink-muted); margin: 0 0 0.5rem; }
+.step-note-warn { color: var(--stale); }
+.step-violation {
+  font-size: 0.82rem;
+  color: var(--fault);
+  margin: 0;
+  padding: 0.3rem 0.6rem 0.4rem;
+  border-top: 1px solid var(--rule);
+}
+
+.step-btn {
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 0;
+  font-size: 0.78rem;
+  padding: 0.15rem 0.45rem;
+  line-height: 1.4;
+}
+.step-btn:hover:not(:disabled) { border-color: var(--signal); color: var(--signal-ink); }
+.step-btn:disabled { color: var(--ink-muted); opacity: 0.55; cursor: not-allowed; }
+.step-btn-danger:hover:not(:disabled) { border-color: var(--fault); color: var(--fault); }
+.step-btn.picked { border-style: dashed; }
+
+/* ── typed fields ───────────────────────────────────────────────────────────────────────── */
+
+.field { margin-bottom: 0.6rem; }
+.field-label { display: block; font-size: 0.8rem; margin-bottom: 0.15rem; }
+.field-label code { font-size: 0.8rem; color: var(--ink); }
+.field-required {
+  margin-left: 0.4rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--stale);
+}
+.field-help { font-size: 0.76rem; color: var(--ink-muted); margin: 0.15rem 0 0; }
+
+/* ── targets ────────────────────────────────────────────────────────────────────────────── */
+
+.target {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+.target-value { font-family: var(--font-mono); font-size: 0.8rem; min-width: 9rem; }
+.target-label { flex: 1 1 auto; min-width: 6rem; }
+.target-room { font-size: 0.78rem; color: var(--ink-muted); min-width: 6rem; }
+.target-kind { width: auto; flex: 0 0 auto; }
+
+.picker { border: 1px solid var(--rule); margin-top: 0.5rem; background: var(--paper-sunk); }
+.picker-head { display: flex; gap: 0.4rem; padding: 0.4rem; border-bottom: 1px solid var(--rule); }
+.picker-head select { flex: 0 0 11rem; }
+.picker-body { max-height: 22rem; overflow-y: auto; padding: 0.4rem; }
+.picker-room {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 0.82rem;
+  margin: 0.5rem 0 0.25rem;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 0.15rem;
+}
+.picker-grid { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+
+/* ── advanced JSON and palette ──────────────────────────────────────────────────────────── */
+
+.advanced { border-top: 1px solid var(--rule); margin-top: 0.5rem; padding-top: 0.5rem; }
+.advanced-head { font-size: 0.8rem; margin-bottom: 0.25rem; }
+.advanced textarea.is-invalid { border-color: var(--fault); }
+
+.palette { border: 1px solid var(--rule); background: var(--paper-sunk); }
+.palette-head { padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--rule); font-size: 0.86rem; }
+.palette-item { padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--rule); }
+.palette-item:last-child { border-bottom: 0; }
+.palette-title { display: flex; align-items: center; gap: 0.5rem; }
+.palette-title code { font-size: 0.76rem; color: var(--ink-muted); }
+.palette-title .step-btn { margin-left: auto; }
+.palette-summary { font-size: 0.8rem; color: var(--ink-muted); margin: 0.2rem 0 0; }
+.palette-reason { font-size: 0.8rem; color: var(--stale); margin: 0.2rem 0 0; }
+.palette-disabled .palette-title strong { color: var(--ink-muted); }
+
+.quest-save { padding: 0.5rem 0 1rem; }
+.quest-builder .card-header { font-size: 0.86rem; font-weight: 600; }

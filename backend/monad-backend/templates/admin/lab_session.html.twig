@@ -1,0 +1,148 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% import 'admin/_macros.html.twig' as m %}
+
+{% block content_title %}Ground-truth session {{ lab_session_id }}{% endblock %}
+
+{% block main %}
+    {% set overall = aggregate.overall %}
+
+    <div class="row">
+        <div class="col-md-3 col-sm-6">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="text-muted text-uppercase small">Checked in</div>
+                    <div class="fs-2 fw-semibold">{{ overall.checked_in }}</div>
+                    <div class="text-muted small">each participant counted once, latest scan anywhere</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="text-muted text-uppercase small">Zone sum</div>
+                    <div class="fs-2 fw-semibold">{{ overall.zone_sum }}</div>
+                    <div class="text-muted small">zones added up</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="text-muted text-uppercase small">Scans</div>
+                    <div class="fs-2 fw-semibold">{{ overall.event_count }}</div>
+                    <div class="text-muted small">{{ overall.zone_count }} zone{{ overall.zone_count == 1 ? '' : 's' }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="text-muted text-uppercase small">Conflicts</div>
+                    <div class="fs-2 fw-semibold {{ overall.conflict_count > 0 ? 'text-danger' : '' }}">{{ overall.conflict_count }}</div>
+                    <div class="text-muted small">exclusion E3</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# The gap between these two is not a rounding error, it is the finding: it is exactly the set
+       of people who entered a new zone without scanning out of the old one. #}
+    {% if overall.checked_in != overall.zone_sum %}
+        <div class="alert alert-info">
+            <strong>{{ (overall.zone_sum - overall.checked_in)|abs }}</strong> difference between the
+            room-level count ({{ overall.checked_in }}) and the sum of zones ({{ overall.zone_sum }}) —
+            that gap is the set of people who entered a new zone without scanning out of the previous one.
+            Informative, not an error.
+        </div>
+    {% endif %}
+
+    <div class="card mb-3">
+        <div class="card-header">Zones</div>
+        <div class="table-responsive">
+            <table class="table table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Zone</th>
+                        <th class="text-end">Checked in</th>
+                        <th class="text-end">Net sum</th>
+                        <th class="text-end">Events</th>
+                        <th class="text-end">Conflicts</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for zone in aggregate.zones %}
+                        <tr>
+                            <td><code>{{ zone.zone_id }}</code></td>
+                            <td class="text-end">{{ zone.checked_in }}</td>
+                            <td class="text-end">{{ zone.net_sum }}</td>
+                            <td class="text-end">{{ zone.event_count }}</td>
+                            <td class="text-end {{ zone.conflict_count > 0 ? 'text-danger fw-semibold' : '' }}">{{ zone.conflict_count }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="5" class="text-muted">No zones yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if conflicts is not empty %}
+        <div class="card mb-3 border-danger">
+            <div class="card-header text-danger">
+                Conflicts — same nonce, different claim. Ask now; after the session this is only an exclusion.
+            </div>
+            <div class="table-responsive">
+                <table class="table table-striped mb-0">
+                    <thead>
+                        <tr><th>Observed</th><th>Zone</th><th>Nonce</th><th>Accepted</th><th>Rejected</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for conflict in conflicts %}
+                            <tr>
+                                <td>{{ conflict.observedAt|date('H:i:s') }}</td>
+                                <td><code>{{ conflict.zoneId }}</code></td>
+                                <td><code>{{ conflict.scanNonce }}</code></td>
+                                <td><code>{{ conflict.acceptedTriple }}</code></td>
+                                <td><code>{{ conflict.rejectedTriple }}</code></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="card mb-3">
+        <div class="card-header">Recording sessions the scans name</div>
+        <div class="table-responsive">{{ m.session_rows(recording_sessions) }}</div>
+        <div class="card-body pt-2 pb-2">
+            <p class="text-muted small mb-0">Through <code>recording_session_id</code> on the scans. A scan stamped by a phone that never uploaded, or whose upload predates the register, names nothing here.</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Latest scans</div>
+        <div class="table-responsive">
+            <table class="table table-striped mb-0">
+                <thead>
+                    <tr><th>Received</th><th>Zone</th><th>Direction</th><th>Participant token</th><th>Recording session</th></tr>
+                </thead>
+                <tbody>
+                    {% for scan in recent_scans %}
+                        <tr>
+                            <td>{{ scan.receivedAt|date('Y-m-d H:i:s') }}</td>
+                            <td><code>{{ scan.zoneId }}</code></td>
+                            <td>
+                                <span class="badge bg-{{ scan.direction.value == 'in' ? 'success' : 'secondary' }}">{{ scan.direction.value }}</span>
+                            </td>
+                            <td><code>{{ scan.participantToken }}</code></td>
+                            <td>{{ scan.recordingSessionId ?? '—' }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="5" class="text-muted">No scans.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

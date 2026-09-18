@@ -1,0 +1,161 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% form_theme form 'bootstrap_5_layout.html.twig' %}
+
+{% block content_title %}{{ quest ? quest.name : 'New quest' }}{% endblock %}
+
+{% block page_actions %}
+    {% if quest %}
+        <form method="post" action="{{ path('admin_lab_quests_duplicate', {id: quest.id}) }}" class="d-inline">
+            <input type="hidden" name="_token" value="{{ csrf_token(csrf) }}">
+            <button type="submit" class="btn btn-secondary">Duplicate{{ locked ? ' as revision' : '' }}</button>
+        </form>
+        <form method="post" action="{{ path('admin_lab_quests_hide', {id: quest.id}) }}" class="d-inline" onsubmit="return confirm('Hide {{ quest.name|e('js') }} now? It stops being offered; enrolments and completions stay.');">
+            <input type="hidden" name="_token" value="{{ csrf_token(csrf) }}">
+            <button type="submit" class="btn btn-secondary">Hide now</button>
+        </form>
+        <a class="btn btn-secondary" href="{{ path('admin_lab_quests_export', {id: quest.id}) }}">Export JSON</a>
+        <a class="btn btn-secondary" href="{{ path('admin_quest_analytics', {id: quest.id}) }}">Analytics</a>
+    {% endif %}
+    <a class="btn btn-secondary" href="{{ path('admin_lab_quests') }}">All quests</a>
+{% endblock %}
+
+{% block main %}
+    {% if quest %}
+        <div class="strip">
+            <span><span class="k">Status</span>{{ quest.availableFrom ? '' : '' }}<span class="state state-muted">{{ locked ? 'locked' : 'open' }}</span></span>
+            <span><span class="k">Created</span>{{ quest.createdAt|clock }} by {{ quest.createdBy ? quest.createdBy.email : '—' }}</span>
+            <span><span class="k">Updated</span>{{ quest.updatedAt|clock }}</span>
+            <span><span class="k">Completions</span>{{ completions }}</span>
+            <span><span class="k">Mirror floor</span><code>{{ floor }}</code>{% if floors|length > 1 %} ({% for f in floors %}<a href="?floor={{ f }}">{{ f }}</a>{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}</span>
+        </div>
+    {% endif %}
+
+    {% if locked %}
+        <div class="alert alert-warning">
+            This quest has {{ completions }} step completion(s). Its step rows are what they point at, so the steps below are
+            read-only and the session features with them; the header saves as usual. For a new step list, <strong>Duplicate as revision</strong>.
+        </div>
+    {% endif %}
+
+    {% if not form.vars.valid %}
+        <div class="alert alert-danger">The header has errors; nothing was saved.{{ form_errors(form) }}</div>
+    {% endif %}
+    {% if step_violations is not empty %}
+        <div class="alert alert-danger">
+            <strong>Step config violations; nothing was saved.</strong>
+            <ul class="mb-0">
+                {% for index, messages in step_violations %}
+                    {% for message in messages %}<li>Step {{ index }}: {{ message }}</li>{% endfor %}
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    {{ form_start(form, {attr: {id: 'quest-form', class: 'quest-builder', novalidate: 'novalidate'}}) }}
+        <div class="row">
+            <div class="col-xl-5">
+                <div class="card mb-3">
+                    <div class="card-header">Header</div>
+                    <div class="card-body">
+                        {{ form_row(form.name) }}
+                        {{ form_row(form.description) }}
+                        <div class="row">
+                            <div class="col-md-6">{{ form_row(form.audience, {label: 'Audience', help: 'operator is filtered out of the participant listing and 404s on start for anyone without the role.'}) }}</div>
+                            <div class="col-md-3">{{ form_row(form.points) }}</div>
+                            <div class="col-md-3">{{ form_row(form.estimatedDuration, {label: 'Est. minutes'}) }}</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">{{ form_row(form.availableFrom, {label: 'Available from'}) }}</div>
+                            <div class="col-md-6">{{ form_row(form.availableTo, {label: 'Available to', help: 'Blank never closes.'}) }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">Replay policy</div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">{{ form_row(form.recurrenceScope, {label: 'Scope', help: 'unlimited is the default and what every quest did before IP-128. per device counts the cooldown at each node separately; per quest counts it anywhere.'}) }}</div>
+                            <div class="col-md-6">{{ form_row(form.recurrenceCooldownSeconds, {label: 'Cooldown seconds'}) }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">Required capabilities</div>
+                    <div class="card-body">
+                        {{ form_row(form.requiredCapabilities, {label: false, help: 'Matched against what the phone reports; a handset missing one is never offered the quest. Steps add their own: ' ~ (derived_capabilities|join(', ') ?: 'none for this step list') ~ '.'}) }}
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">Session features (start step)</div>
+                    <div class="card-body">
+                        <p class="text-muted small">Declared once on the start step and on for the whole run. Every flag defaults to off, so a probe quest without broadcast records dwells with nothing on air.</p>
+                        {{ form_row(form.featureBroadcast, {label: 'broadcast: the lab identity frame on air for the whole session', disabled: locked}) }}
+                        {{ form_row(form.featureTrack, {label: 'track: record the trajectory (pose stream)', disabled: locked}) }}
+                        {{ form_row(form.featureWitness, {label: 'witness: monitor the beacon zones', disabled: locked}) }}
+                        {{ form_row(form.featureIlluminator, {label: 'illuminator: generate traffic for the CSI receivers (inert without an access point)', disabled: locked}) }}
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">Armed devices</div>
+                    <div class="card-body">
+                        {{ form_row(form.armedDevices, {label: false, help: 'Leave every box empty to offer the quest at EVERY node. Tick nodes to restrict it.'}) }}
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">Route policy</div>
+                    <div class="card-body">
+                        {{ form_row(form.routeMode, {label: 'Mode', help: 'fixed serves the declared step order. pool draws one route per enrollment from the list below.'}) }}
+                        {{ form_row(form.routes, {label: 'Routes', help: 'One route per line, target keys comma-separated (MONAD-FP-15, monad02). Every key must be a target of a probe step. Generated by monad-knowledge lab quest-build --pool N; the walkability rule reads PostGIS and is not re-implemented here.'}) }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-7">
+                <div class="card mb-3">
+                    <div class="card-header">Preflight</div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-2">Warnings never block a save; step violations do. Payload {{ (payload_bytes / 1024)|number_format(1) }} kB.</p>
+                        <ul class="preflight mb-0" id="preflight-server">
+                            {% for w in preflight %}
+                                <li class="warn">{{ w }}</li>
+                            {% else %}
+                                <li class="ok">Nothing to warn about as saved.</li>
+                            {% endfor %}
+                        </ul>
+                        <ul class="preflight mb-0 mt-2" id="preflight-client" hidden></ul>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">Steps</div>
+                    <div class="card-body">
+                        <div id="quest-steps-island" data-locked="{{ locked ? '1' : '0' }}">
+                            <noscript><p class="text-muted">The step editor needs JavaScript. The stored step list is posted back unchanged.</p></noscript>
+                        </div>
+                    </div>
+                </div>
+
+                {{ form_row(form.stepsJson) }}
+                <div class="quest-save">
+                    <button type="submit" class="btn btn-primary">{{ quest ? 'Save' : 'Create quest' }}</button>
+                    <span class="text-muted small ms-2">{{ locked ? 'Header only.' : 'Header and steps; every step is re-validated on the server.' }}</span>
+                </div>
+            </div>
+        </div>
+    {{ form_end(form) }}
+
+    <script type="application/json" id="quest-steps">{{ steps_json|raw }}</script>
+    <script type="application/json" id="step-schemas">{{ schemas_json|raw }}</script>
+    <script type="application/json" id="placements">{{ placements_json|raw }}</script>
+    <script type="application/json" id="step-violations">{{ violations_json|raw }}</script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.MonadQuestBuilder) { window.MonadQuestBuilder.mount(document.getElementById('quest-steps-island')); }
+        });
+    </script>
+{% endblock %}

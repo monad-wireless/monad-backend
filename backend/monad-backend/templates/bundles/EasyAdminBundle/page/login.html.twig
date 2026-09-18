@@ -1,0 +1,61 @@
+{#
+  The sign-in page, in the same system as the rest (IP-157 Phase 8).
+
+  It does NOT extend the shell: there is no rail to show someone who is not signed in, and a
+  half-drawn navigation is an invitation to guess URLs. One card on the sunk paper, the
+  wordmark, one sentence and two fields.
+
+  The vendor template's variables are kept verbatim so SecurityController needs no change:
+  `error`, `last_username`, `csrf_token_intention`, `target_path`, `username_label`,
+  `password_label`, `action`. Remember-me and forgot-password are off by decision (see
+  SecurityController) and have no markup here at all rather than a hidden branch.
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sign in · MonadCount</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="alternate icon" href="/favicon.ico" sizes="32x32">
+    <link rel="stylesheet" href="/admin.css">
+</head>
+<body class="mc-login">
+    <div class="mc-login-card">
+        <div class="mc-wordmark">
+            <b>MonadCount</b>
+            <small>lab console</small>
+            <span class="mc-tone" aria-hidden="true"><i></i><i></i></span>
+        </div>
+
+        <p class="lede">The management interface for the MonadCount instrument. Operator accounts only.</p>
+
+        {% if error|default(false) %}
+            <div class="mc-login-error">{{ error.messageKey|trans(error.messageData, 'security') }}</div>
+        {% endif %}
+
+        <form method="post" action="{{ action|default('') }}">
+            {% if csrf_token_intention|default(false) %}
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token(csrf_token_intention) }}">
+            {% endif %}
+            <input type="hidden" name="{{ target_path_parameter|default('_target_path') }}" value="{{ target_path|default('/admin') }}">
+
+            <div class="field">
+                <label for="username">{{ username_label|default('Email') }}</label>
+                <input type="text" id="username" name="{{ username_parameter|default('_username') }}"
+                       value="{{ last_username|default('') }}" required autofocus autocomplete="username"
+                       spellcheck="false" autocapitalize="none">
+            </div>
+
+            <div class="field">
+                <label for="password">{{ password_label|default('Password') }}</label>
+                <input type="password" id="password" name="{{ password_parameter|default('_password') }}"
+                       required autocomplete="current-password">
+            </div>
+
+            <button type="submit" class="ui-btn ui-btn-primary">Sign in</button>
+        </form>
+    </div>
+</body>
+</html>

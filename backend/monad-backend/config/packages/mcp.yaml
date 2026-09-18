@@ -1,0 +1,78 @@
+# MCP server — the authoring surface for lab content.
+#
+# Quest definitions used to be JSON files baked into the image, which meant changing what a
+# participant is told required a rebuild, a registry push and an Ansible run. Session content
+# changes between sessions; the deployment artefact should not. So the definitions live in the
+# database and this is how they are written.
+#
+# HTTP transport, not stdio: the server that owns the data runs in a container on the project
+# host, and stdio would mean a shell into it. The endpoint is reachable exactly like /admin —
+# tailnet only, nginx refuses it on the public vhost — and authenticated with an ordinary account
+# over HTTP Basic (see the `mcp` firewall in security.yaml). One credential story for the whole
+# backend: the account that signs into the panel is the account that authors over MCP.
+mcp:
+    app: 'monad-lab'
+    version: '1.0.0'
+    description: 'Lab content authoring for MonadCount: quests, scan markers, session tallies.'
+    instructions: |
+        This server authors the content of a running measurement lab.
+
+        Quests are participant scripts. A quest is a sequence of steps; the step types are
+        start, wait, scan_qr, connect_to_ap, walk_to, find_ble_device, sensor_capture,
+        ble_advertise, probe, observe, finish.
+
+        An observe step asks the participant for a number they can see and records it
+        several times over. It is the only channel here that counts PEOPLE rather than
+        phones, so its readings are never reconciled against the BLE count — the gap
+        between them is the penetration bias, and measuring it is the point. Needs
+        config.prompt and config.min_readings.
+
+        Six facts about this deployment that change what is valid:
+
+        1. There is no access point. AP mode is impossible on the fleet's AX210 (the Intel LAR
+           firmware limit crashes the iax backport), so illumination is monitor-mode injection
+           on 2.4 GHz ch11 and there is nothing for a phone to associate to. A connect_to_ap
+           step blocks the run on an association that cannot happen — do not author one.
+        2. A scan_qr step is matched by string. The app compares the scanned text to the step's
+           `expected_value` (case-insensitive) and nothing consults a table, so the marker a
+           participant scans must carry exactly that string. Render it with lab_marker_svg.
+        3. A ble_advertise step makes the phone broadcast the lab identity frame so the fleet's
+           passive BLE scan can observe it. The identity comes from the lab bundle's advertise
+           namespace, never from the quest config. iOS honours it only in the foreground, and
+           the quest automatically requires the ble.advertise capability.
+        4. A probe step is "scan one of these surveyed points, then hold still" — the step type
+           for a fingerprint or a treasure-hunt leg. Its targets carry a resolved label, room
+           and kind (card|node), which is why you should generate a probe quest with
+           `monad-knowledge lab quest-build` rather than hand-author it: that command reads the
+           positions out of PostGIS, so a card that moves costs a regenerate, not a hand edit
+           nothing checks.
+        5. To HIDE a quest or change its timing, use lab_quest_update — never
+           lab_quest_write. Write replaces the step rows, and quest_step_completions
+           point at those rows, so the database refuses it for any quest somebody has
+           run. lab_quest_update touches the quest row only: `available_to: "now"`
+           hides one, `"never"` re-opens it, and points / description / duration go the
+           same way. lab_quest_list reports a computed `status` (live / scheduled /
+           hidden) so nothing has to compare two timestamps by hand.
+        6. The identity broadcast is session-scoped and every feature defaults to OFF. Declare
+           it once on the start step: config.features {broadcast, track, witness, illuminator}.
+           A probe quest without features.broadcast records dwells with nothing on air, and the
+           symptom is a gap in the trajectory rather than an error. Do not combine
+           features.broadcast with ble_advertise steps — a block-bracketing quest is correct
+           only while its on-air interval equals its labelled one.
+
+    client_transports:
+        http: true
+    http:
+        path: '/mcp'
+        # DNS-rebinding protection. The SDK defaults this to localhost only and answers anything
+        # else with a bare 403 "Invalid Host header" — which looks exactly like a rejected
+        # credential and is not, so it costs an afternoon if you meet it without knowing.
+        #
+        # Every name this endpoint is legitimately reached by has to be listed. nginx forwards the
+        # client's Host verbatim, so these are the names an operator types:
+        allowed_hosts:
+            - 'monad-api.monad.internal'   # the intranet name — the supported route
+            - 'ccx33.monad.tailnet'        # MagicDNS name of the control host
+            - '100.64.0.1'                 # its tailnet address, used by the port-parity listener
+            - 'localhost'                  # inside the container, e.g. the HEALTHCHECK
+            - '127.0.0.1'

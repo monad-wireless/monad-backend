@@ -40,6 +40,30 @@ class QuestStepCompletion
     #[ORM\Column(name: 'completed_at', type: 'datetime', nullable: true)]
     private ?\DateTime $completedAt = null;
 
+    /**
+     * Monotonic clock reading at this step, in nanoseconds (IP-128).
+     *
+     * WHY WALL CLOCK IS NOT ENOUGH. These labels only have research value if they
+     * can be time-joined to the CSI the node recorded, and neither clock in that
+     * join is trustworthy on its own: the fleet nodes have no RTC battery, so
+     * every node boots hours-to-weeks in the past and chrony steps it (a +51 s
+     * step has been observed mid-session), while a handset's wall clock can be
+     * adjusted by the user or the network at any moment. A step whose only
+     * timestamp is wall-clock therefore cannot be placed against a capture with
+     * any confidence.
+     *
+     * A monotonic reading cannot be steered and never goes backwards, so the pair
+     * (`mono_ns`, `completed_at`) makes drift over a run *measurable* instead of
+     * assumed — which is the same contract the ground-truth channel already uses
+     * (`GroundTruthScan::$monoNs`), deliberately spelled the same way so one
+     * analysis join covers both.
+     *
+     * Nullable: pre-IP-128 rows and clients that do not send it stay valid, and
+     * `bigint` maps to a PHP string because nanoseconds overflow 32-bit ints.
+     */
+    #[ORM\Column(name: 'mono_ns', type: 'bigint', nullable: true)]
+    private ?string $monoNs = null;
+
     #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
     private ?\DateTimeImmutable $createdAt = null;
 
@@ -173,6 +197,18 @@ class QuestStepCompletion
                 $skipRecord->setStepCompletion(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getMonoNs(): ?string
+    {
+        return $this->monoNs;
+    }
+
+    public function setMonoNs(?string $monoNs): static
+    {
+        $this->monoNs = $monoNs;
 
         return $this;
     }

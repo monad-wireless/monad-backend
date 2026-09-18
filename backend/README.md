@@ -7,8 +7,8 @@ Gamified BLE sensor data collection platform for indoor positioning and channel 
 - **Backend:** Symfony 5+ (PHP 8.3)
 - **Database:** PostgreSQL 16
 - **Auth:** JWT (lexik/jwt-authentication-bundle)
-- **Storage:** AWS S3 (presigned URLs + direct stream upload)
-- **Infra:** Terraform on AWS (EC2 t3.micro, Elastic IP, ECR)
+- **Storage:** Hetzner Object Storage, S3-compatible via `async-aws/s3` (presigned URLs + direct stream upload)
+- **Infra:** project host (Hetzner CCX33), Docker Compose behind the host nginx; image from GHCR
 - **Containerization:** Docker + Docker Compose
 
 ## Local Development Setup
@@ -37,10 +37,12 @@ Required variables:
 | `APP_SECRET` | Symfony app secret |
 | `JWT_PASSPHRASE` | JWT key passphrase |
 | `CORS_ALLOW_ORIGIN` | CORS regex pattern |
-| `AWS_S3_BUCKET` | S3 bucket name |
-| `AWS_S3_ACCESS_KEY_ID` | AWS access key |
-| `AWS_S3_SECRET_ACCESS_KEY` | AWS secret key |
-| `AWS_S3_REGION` | AWS region (default `eu-central-1`) |
+| `HETZNER_S3_BUCKET` | S3 bucket name |
+| `HETZNER_S3_ACCESS_KEY` | Hetzner Object Storage access key |
+| `HETZNER_S3_SECRET_KEY` | Hetzner Object Storage secret key |
+| `HETZNER_S3_REGION` | Storage region (e.g. `fsn1`) |
+| `HETZNER_S3_ENDPOINT` | **Mandatory** — no default. An empty endpoint used to mean "talk to Amazon". |
+| `HETZNER_S3_USE_PATH_STYLE` | `1` — Hetzner has no wildcard certificate, so path-style addressing is required |
 
 ### 2. Start services
 
@@ -78,44 +80,19 @@ This creates:
 docker exec monad_symfony php bin/console api:openapi:export --output=/var/www/html/openapi.json
 ```
 
-## Infrastructure (AWS)
+## Infrastructure
 
-Managed via Terraform in `terraform/`.
+Deployed to `api.monad.dubec.dev` — the project host (Hetzner CCX33), behind the host nginx that
+already terminates TLS for `monad.dubec.dev`. The container binds loopback only; nginx proxies to
+it. See `docker-compose.deploy.yml` and `deploy/README.md`.
 
-### Resources provisioned
-
-- **ECR** repository: `monad-backend`
-- **EC2** instance: `t3.micro`, Amazon Linux 2023, 30GB gp3
-- **Elastic IP** for stable public address
-- **Security Group**: ports 80, 443, 22 open
-- **IAM Role**: EC2 with ECR read access
-- **SSH Key Pair**: uses `~/.ssh/monad-key.pub`
-- **Region**: `eu-north-1`
-
-### Terraform commands
+The image is built by CI and published to GHCR. There is no cloud provisioning step and no
+infrastructure-as-code for this service — it is one container on a host that already exists.
 
 ```bash
-cd backend/terraform
-terraform init
-terraform plan
-terraform apply
-```
-
-Outputs:
-- `ip` - public IP
-- `ssh` - SSH command
-- `ecr_url` - ECR repository URL
-
-### Deploying to EC2
-
-The EC2 user data installs Docker and docker-compose. To deploy:
-
-```bash
-# SSH into the instance
-ssh -i ~/.ssh/monad-key ec2-user@<ELASTIC_IP>
-
-# Clone/pull the repo, copy .env, then:
-docker compose up -d
+# on the host, next to docker-compose.deploy.yml and its .env
+docker compose -f docker-compose.deploy.yml pull
+docker compose -f docker-compose.deploy.yml up -d
 ```
 
 ## API Reference
@@ -248,7 +225,7 @@ curl -X POST http://localhost:8000/api/admin/quests \
 ## Data Flow
 
 ```
-Mobile App                        Backend                         AWS S3
+Mobile App                        Backend                Hetzner Object Storage
     |                                |                              |
     |-- POST /quest/{id}/start ----->|                              |
     |<-- enrollment_id, steps, path--|                              |
@@ -256,8 +233,9 @@ Mobile App                        Backend                         AWS S3
     | [BLE scanning in background]   |                              |
     | [User completes steps]         |                              |
     |                                |                              |
-    |-- POST /storage/experiment-upload --------------------------->|
-    |   (raw TSV body, X-Filename, X-Experiment-Id headers)        |
+    |-- POST /storage/session-upload ------------------------------>|
+    |   (streams first, metadata.json LAST — its presence          |
+    |    marks the session complete)                               |
     |<-- objectKey, url -------------|                              |
     |                                |                              |
     |-- POST /quest/{id}/complete -->|                              |
@@ -268,8 +246,11 @@ Mobile App                        Backend                         AWS S3
 ### S3 path structure
 
 ```
-experiments/{year}/{month}/{day}/{userId}/{experimentId}/{filename}
+datasets/monad-app-sessions/{participantId}/{sessionId}/{filename}
 ```
+
+Mirrors the `csid` fleet convention, so a phone session and a radio capture are siblings in one
+bucket and joinable by session rather than by upload date.
 
 ### Experiment data format (TSV)
 

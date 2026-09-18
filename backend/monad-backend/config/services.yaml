@@ -4,6 +4,29 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    # Hetzner Object Storage requires path-style addressing.
+    # Default for the variable itself, not a separate parameter. It used to be declared as
+    # `env(HETZNER_S3_USE_PATH_STYLE_DEFAULT)` and consumed via `default:HETZNER_S3_USE_PATH_STYLE_DEFAULT:...`,
+    # but the `default:` processor resolves a *parameter*, not an env var — so container
+    # compilation failed with "parameter not found" and every session upload returned 500,
+    # whether or not the variable was set.
+    env(HETZNER_S3_USE_PATH_STYLE): '1'
+    # IP-149 — the admin's clock. Every timestamp the management interface prints is the stored
+    # instant converted to this one zone, with the zone abbreviation beside it. Defaults to the
+    # lab's own zone rather than UTC because the operator reads it standing in the building.
+    env(MONAD_ADMIN_TIMEZONE): 'Europe/Bratislava'
+    # IP-149 — the walk figures. Both empty by default: an unconfigured deployment renders every
+    # admin table from Postgres alone and prints one sentence where the figures would be.
+    # Empty means "no metrics store": the arming check stays off and the fleet read reports
+    # `reachable: false`. Declared here so an UNSET variable is the empty string too — the
+    # `default::` processor below used to hand the readers null, a TypeError on every request
+    # on a host without the variable (the dev compose, this test suite, a laptop).
+    env(MONAD_METRICS_URL): ''
+    env(MONAD_WEB_INTERNAL_URL): ''
+    env(MONAD_WALK_FIGURE_KEY): ''
+    # IP-157 — the Firebase service account path; empty selects the null push adapter. Declared
+    # for the same reason as the three above: an UNSET variable must read as '' and not null.
+    env(MONAD_FCM_CREDENTIALS): ''
 
 services:
     # default configuration for services in *this* file
@@ -25,26 +48,126 @@ services:
     # please note that last definitions always *replace* previous ones
 
     # S3 Service configuration
+    # Object storage is Hetzner Object Storage — the same tenancy the csid fleet captures and the
+    # simulation artefacts live in, addressed by the same HETZNER_S3_* variables monad-knowledge
+    # already uses, so one ansible-vault secret set covers both.
     App\Service\S3Service:
         arguments:
-            $awsRegion: '%env(AWS_S3_REGION)%'
-            $awsBucket: '%env(AWS_S3_BUCKET)%'
-            $awsAccessKeyId: '%env(AWS_S3_ACCESS_KEY_ID)%'
-            $awsSecretAccessKey: '%env(AWS_S3_SECRET_ACCESS_KEY)%'
-            $presignedUrlExpiry: '%env(AWS_S3_PRESIGNED_URL_EXPIRY)%'
+            $region: '%env(HETZNER_S3_REGION)%'
+            $bucket: '%env(HETZNER_S3_BUCKET)%'
+            $accessKey: '%env(HETZNER_S3_ACCESS_KEY)%'
+            $secretKey: '%env(HETZNER_S3_SECRET_KEY)%'
+            $presignedUrlExpiry: '%env(HETZNER_S3_PRESIGNED_URL_EXPIRY)%'
+            $endpoint: '%env(HETZNER_S3_ENDPOINT)%'
+            $usePathStyle: '%env(bool:HETZNER_S3_USE_PATH_STYLE)%'
 
-    # OpenAPI Decorators - chained in order
-    # AuthDecorator wraps the base OpenApiFactory
+    # Operator-authored lab bundle. A file, not a table: it describes physical reality and is
+    # edited by whoever is standing next to the hardware.
+    App\Service\LabConfigService:
+        arguments:
+            $configPath: '%kernel.project_dir%/config/lab/lab.json'
+
+    # OpenAPI decorators, chained explicitly (IP-157). They used to decorate
+    # `api_platform.openapi.factory`; API Platform is gone, so the chain now starts at an empty
+    # document and ends in a Nelmio describer. Explicit arguments because three services
+    # implement OpenApiFactoryInterface and autowiring could not pick one.
     App\OpenApi\AuthDecorator:
-        decorates: 'api_platform.openapi.factory'
-        arguments: ['@App\OpenApi\AuthDecorator.inner']
+        arguments: ['@App\OpenApi\EmptyOpenApiFactory']
 
-    # QuestDecorator wraps AuthDecorator
     App\OpenApi\QuestDecorator:
-        decorates: 'App\OpenApi\AuthDecorator'
-        arguments: ['@App\OpenApi\QuestDecorator.inner']
+        arguments: ['@App\OpenApi\AuthDecorator']
 
-    # StorageDecorator wraps QuestDecorator
     App\OpenApi\StorageDecorator:
-        decorates: 'App\OpenApi\QuestDecorator'
-        arguments: ['@App\OpenApi\StorageDecorator.inner']
+        arguments: ['@App\OpenApi\QuestDecorator']
+
+    # What /api/doc renders from the chain above. Priority -100 is the one Nelmio gave its own
+    # ApiPlatformDescriber, so the merge order against the attribute (-200) and route (-400)
+    # describers is unchanged. `@serializer` rather than the bare object normalizer: nested
+    # models are only normalized through a normalizer that has the serializer injected.
+    #
+    # Known and pre-existing: swagger-php logs "Multiple definitions for @OA\Post()->requestBody"
+    # (54 PHP warnings per render) because POST /api/admin/quests is described twice, by
+    # #[OA\...] attributes on AdminController::createQuest() and by QuestDecorator. Moving this
+    # describer to -300 did not change the count (measured 2026-09-16); the merge itself logs.
+    # The fix is to describe that operation once, which is not this change's scope.
+    App\OpenApi\DecoratorDescriber:
+        arguments: ['@App\OpenApi\StorageDecorator', '@serializer']
+        tags:
+            - { name: 'nelmio_api_doc.describer', priority: -100 }
+
+    # IP-128 — "is this node capturing?" as a quest-arming input. Fails open: an
+    # unreachable metrics store must not take the participant path down. Empty
+    # MONAD_METRICS_URL disables the check entirely, which is the default.
+    App\Quest\CaptureStateProvider: '@App\Quest\MimirCaptureState'
+
+    App\Quest\MimirCaptureState:
+        arguments:
+            $metricsUrl: '%env(MONAD_METRICS_URL)%'
+
+    # The fleet's public vital signs for the website (`GET /api/lab/fleet`).
+    #
+    # Same $metricsUrl as the arming check above, because it is the same
+    # dependency: one address for "where Mimir is". Empty means the endpoint
+    # reports `reachable: false` — which the site renders as a sentence, not as
+    # zeros — so an unconfigured deployment degrades honestly rather than
+    # inventing a quiet fleet.
+    #
+    # In production that value is `http://mimir:9009/prometheus`: container DNS
+    # on the shared `monad` bridge, so Mimir needs no published host port and
+    # the website needs no route into the observability stack.
+    App\Fleet\FleetMetricsReader:
+        arguments:
+            $metricsUrl: '%env(MONAD_METRICS_URL)%'
+
+    # IP-149 — signed URLs to the walk figures monad-knowledge web renders under `/internal/`.
+    # The key is `vault_walk_figure_signing_key` in the monad-knowledge inventory, rendered into
+    # this container's env AND into monad-web's config by the same play, so the two cannot drift.
+    # The URL is the tailnet name the operator's browser can reach, not a docker-bridge address:
+    # the browser fetches the image, not this container.
+    App\Service\WalkFigureUrlSigner:
+        arguments:
+            $baseUrl: '%env(MONAD_WEB_INTERNAL_URL)%'
+            $signingKey: '%env(MONAD_WALK_FIGURE_KEY)%'
+
+    App\Twig\AdminExtension:
+        arguments:
+            $timezone: '%env(MONAD_ADMIN_TIMEZONE)%'
+
+    # IP-157 Phase 8 — Settings prints the zone as a FACT rather than leaving the reader to
+    # infer it from an abbreviation on a row. Same variable the filter converts with, so the
+    # page and the timestamps cannot disagree about which clock the interface is on.
+    App\Controller\Admin\SettingsController:
+        arguments:
+            $adminTimezone: '%env(MONAD_ADMIN_TIMEZONE)%'
+
+    # The same zone reaches EasyAdmin's own date formatting through configureCrud(), so a CRUD
+    # column and a reading page cannot print two different instants for one row.
+    App\Controller\Admin\DashboardController:
+        arguments:
+            $adminTimezone: '%env(MONAD_ADMIN_TIMEZONE)%'
+
+    # IP-157 — the beta signup page and its retention. The window is one number read in three
+    # places (the consent sentence on /join, the contact-data note under it, and the purge), so
+    # the three cannot disagree. DEFAULT_URI is the API's own base (https://api.monad.dubec.dev in
+    # production): /join arrives with the site's Host and links its legal pages back here.
+    App\Controller\JoinController:
+        arguments:
+            $retentionDays: '%env(int:MONAD_BETA_RETENTION_DAYS)%'
+            $apiBaseUrl: '%env(DEFAULT_URI)%'
+            $publicSiteUrl: '%env(MONAD_PUBLIC_SITE_URL)%'
+
+    App\Controller\Admin\OnboardingController:
+        arguments:
+            $apiBaseUrl: '%env(DEFAULT_URI)%'
+
+    App\Command\BetaPurgeCommand:
+        arguments:
+            $retentionDays: '%env(int:MONAD_BETA_RETENTION_DAYS)%'
+
+    # IP-157 — the push transport. One port, two adapters, chosen once per container by
+    # PushSenderFactory: FCM (kreait) when MONAD_FCM_CREDENTIALS names a readable service-account
+    # file, the null adapter otherwise (inbox only, one log line per skipped send). A factory
+    # rather than an alias because the choice depends on a file existing at boot, which YAML
+    # cannot express.
+    App\Notification\PushSender:
+        factory: ['@App\Notification\PushSenderFactory', 'create']
