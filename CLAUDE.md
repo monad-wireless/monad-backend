@@ -29,7 +29,7 @@ API for the MonadCount mobile instrument. Symfony 7.3 (PHP 8.3) + PostgreSQL.
 | `POST /api/lab/ground-truth` | Ground-truth check-in/out scans from participant devices, single or batched. Idempotent on `scan_nonce`. |
 | `GET /api/lab/ground-truth/{labSessionId}` | Live room-wide people tally for one session, per zone and overall. Cheap to poll. |
 | `/api/auth/*`, `/api/quest*` | Accounts and the quest schedule engine. `POST /api/quest/{id}/start` takes an optional `{"handset": {…}}` body (IP-149): the phone's description of itself, validated against a **closed key set** (`App\Quest\HandsetDescriptor`, 400 `VALIDATION_108`/`_109` on anything present and wrong) and frozen VERBATIM on the enrollment (`handset_snapshot`) beside the `handsets` row it finds-or-creates by the app's own installation UUID. An empty body is an app build that predates the descriptor and stays valid. |
-| `GET /api/lab/fleet` | The fleet's public vital signs for `monad.dubec.dev` — per-node readings and fleet-wide scalars, from a closed PromQL allow-list (`App\Fleet\FleetMetricsReader`). Exists so the website, a host process, never needs a route into the observability stack: Mimir publishes no host port, this container is on the same `monad` network and reaches `mimir:9009` by container DNS. Unauthenticated (the site holds no JWT) and **404'd on the public vhost** like `/admin` — the site calls it over loopback. `reachable: false` is a first-class answer and must not be rendered as zeros. |
+| `GET /api/lab/fleet` | The fleet's public vital signs for `monad.dubec.dev` — per-node readings and fleet-wide scalars, from a closed PromQL allow-list (`App\Fleet\FleetMetricsReader`). Exists so the website, a host process, never needs a route into the observability stack: Mimir publishes no host port, this container is on the same `monad` network and reaches `mimir:9009` by container DNS. Unauthenticated (the site holds no JWT) and **404'd on the public vhost** — the site calls it over loopback. It kept that treatment when `/admin` was published on 2026-09-18, because an unauthenticated raw-metrics projection and a login page are different exposures. `reachable: false` is a first-class answer and must not be rendered as zeros. |
 
 `MONAD_METRICS_URL` (`http://mimir:9009/prometheus`) is read by two things, because it is one
 dependency: the fleet endpoint above, and the IP-128 quest-arming check ("is this node
@@ -71,10 +71,14 @@ docker exec -it monad_api php bin/console app:lab-sessions:backfill             
 
 ## Management interface (`/admin`)
 
-EasyAdmin, session-authenticated, `ROLE_SUPERADMIN` only — and **not published to the internet**:
-the public vhost 404s `/admin`, and the surface is reachable over the tailnet at
-`http://monad-api.monad.internal:8084/admin` (`intranet_services` in the monad-knowledge inventory).
-Being on the VPN is the first gate, signing in is the second.
+EasyAdmin, session-authenticated, `ROLE_SUPERADMIN` only. **Published on the public Internet since
+2026-09-18** at `https://api.monad.dubec.dev/admin`, by the researcher's decision; the vhost 404'd it
+until then. The login form is now the only gate, and it carries no rate limiter —
+`config/packages/rate_limiter.yaml` throttles `POST /join` and nothing else.
+
+The tailnet path still exists and is unchanged: `http://monad-api.monad.internal/admin`
+(`intranet_services` in the monad-knowledge inventory). Prefer it when you want the IP-149 walk
+figures, which load from `monad-web.monad.internal` and therefore render only on the tailnet.
 
 Accounts come from the console, never from an endpoint — `/api/auth/register` can only mint
 `ROLE_USER`, because an endpoint that could grant `ROLE_SUPERADMIN` would be a privilege-escalation
