@@ -129,6 +129,19 @@ final class QuestPreflight
                 if ($broadcastDeclared) {
                     $capabilities[] = 'ble.advertise';
                 }
+
+                // `features.track` asks the handset to record its own trajectory, and only iOS
+                // can. `PoseTracker.android.kt` is a deliberate stub, so an Android handset offered
+                // a tracked quest walks every stop and uploads an empty pose stream. Gating it on a
+                // device token rather than on `audience: operator` makes that a fact the catalogue
+                // enforces instead of a convention somebody has to remember.
+                //
+                // NOT `lidar.mesh`. The mesh needs LiDAR; the trajectory does not. Requiring the
+                // mesh token would withhold the quest from every non-Pro iPhone, which tracks
+                // perfectly well on camera and IMU and simply exports no geometry.
+                if (($features['track'] ?? false) === true) {
+                    $capabilities[] = 'pose.track';
+                }
             }
         }
 

@@ -60,9 +60,11 @@ final class QuestPreflightTest extends TestCase
         ];
     }
 
-    private static function start(bool $broadcast = false): array
+    private static function start(bool $broadcast = false, bool $track = false): array
     {
-        return ['name' => 'Before you start', 'type' => 'start', 'config' => ['features' => ['broadcast' => $broadcast]]];
+        return ['name' => 'Before you start', 'type' => 'start', 'config' => [
+            'features' => ['broadcast' => $broadcast, 'track' => $track],
+        ]];
     }
 
     private static function probe(array $targets): array
@@ -159,6 +161,33 @@ final class QuestPreflightTest extends TestCase
             self::start(false),
             ['name' => 'Count', 'type' => 'observe', 'config' => ['prompt' => 'How many?', 'min_readings' => 5]],
         ]));
+    }
+
+    /**
+     * Only iOS implements a pose tracker; `PoseTracker.android.kt` is a stub. Before this token the
+     * tracked survey route was kept off Android by `audience: operator` alone, which is a
+     * convention rather than a gate — an operator on a borrowed Android would have walked twenty
+     * stops and uploaded an empty pose stream.
+     */
+    public function testATrackedQuestNeedsThePoseCapability(): void
+    {
+        self::assertSame(
+            // Start step first (broadcast, then track), probe second — the order the loop walks.
+            ['ble.advertise', 'pose.track', 'camera.qr'],
+            $this->capabilities([self::start(true, true), self::probe([self::target('MONAD-FP-07')])]),
+        );
+    }
+
+    public function testTrackingIsNotGatedOnLidar(): void
+    {
+        // The mesh needs LiDAR; the trajectory does not. Requiring `lidar.mesh` would withhold the
+        // survey from every non-Pro iPhone, which tracks on camera and IMU and exports no geometry.
+        self::assertNotContains('lidar.mesh', $this->capabilities([self::start(true, true)]));
+    }
+
+    public function testAnUntrackedQuestNeedsNoPoseCapability(): void
+    {
+        self::assertSame(['ble.advertise'], $this->capabilities([self::start(true, false)]));
     }
 
     public function testCapabilitiesAreDeduplicatedAcrossSteps(): void

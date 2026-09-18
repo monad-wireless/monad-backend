@@ -265,6 +265,7 @@ class LabTools
         // authoring time.
         $hasProbe = false;
         $broadcastDeclared = false;
+        $trackDeclared = false;
 
         // IP-157: every step is built and validated against its type's schema BEFORE the old
         // steps are deleted, so an invalid payload leaves the stored quest untouched. Violations
@@ -329,6 +330,8 @@ class LabTools
             if ($type === QuestStepType::START) {
                 $features = (array) ($config['features'] ?? []);
                 $broadcastDeclared = ($features['broadcast'] ?? false) === true;
+                // See QuestPreflight for why this is `pose.track` and not `lidar.mesh`.
+                $trackDeclared = ($features['track'] ?? false) === true;
             }
 
             $step = new QuestStep();
@@ -373,6 +376,21 @@ class LabTools
                 . 'receiver can hear them. Add {"features": {"broadcast": true}} to the start step.';
         }
 
+        // A session-scoped broadcast needs the peripheral role exactly as a `ble_advertise` step
+        // does. Derived here as well as in QuestPreflight because this method duplicates that
+        // logic by design — the class docblock there requires the two to agree — and a quest
+        // whose ONLY radio role is `features.broadcast` (Counting) otherwise declares nothing and
+        // is offered to a handset that cannot broadcast. Those runs record their readings with
+        // nothing on air, so every one is a number with no position.
+        if ($broadcastDeclared) {
+            $requiredCapabilities[] = 'ble.advertise';
+        }
+
+        if ($trackDeclared) {
+            $requiredCapabilities[] = 'pose.track';
+        }
+
+        // `setRequiredCapabilities` dedupes, so the probe/advertise/broadcast overlap is fine.
         $quest->setRequiredCapabilities($requiredCapabilities);
 
         $this->entityManager->persist($quest);

@@ -13,8 +13,11 @@ use App\Enum\QuestEnrollmentStatus;
 use App\Enum\QuestStepCompletionStatus;
 use App\Enum\QuestStepType;
 use App\Mcp\LabTools;
+use App\Quest\QuestPreflight;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 
 /**
  * `lab_quest_update`'s `new_name`, against a real PostgreSQL.
@@ -49,6 +52,12 @@ final class QuestRenameTest extends KernelTestCase
         $this->tools = $container->get(LabTools::class);
         $this->scrub();
         $this->author = $this->makeUser();
+        // `questWrite` attributes the quest to the authenticated account and refuses without one.
+        // The MCP surface runs behind the API firewall in production; here the token is set
+        // directly, because what is under test is the capability derivation and not the gate.
+        $container->get(TokenStorageInterface::class)->setToken(
+            new UsernamePasswordToken($this->author, 'api', $this->author->getRoles()),
+        );
     }
 
     protected function tearDown(): void
@@ -136,6 +145,112 @@ final class QuestRenameTest extends KernelTestCase
             'SELECT name FROM quests WHERE id = :id',
             ['id' => (string) $quest->getId()],
         );
+    }
+
+    /**
+     * `questWrite` derives capabilities with its OWN copy of QuestPreflight's rules, and that
+     * class's docblock requires the two to agree sentence for sentence. Fixing the preflight copy
+     * alone left the MCP write path still producing `[]` for a broadcast-only quest, so this pins
+     * the agreement rather than the one implementation that happened to be edited.
+     */
+    public function testABroadcastOnlyQuestWrittenThroughMcpDeclaresTheAdvertiseCapability(): void
+    {
+        $result = $this->tools->questWrite(
+            name: self::QUEST_PREFIX . 'broadcast',
+            description: 'Counting, in miniature.',
+            available_from: '2026-09-01T00:00:00+00:00',
+            steps: [
+                ['name' => 'Before you start', 'type' => 'start', 'order' => 0,
+                    'config' => ['features' => ['broadcast' => true]]],
+                ['name' => 'Count', 'type' => 'observe', 'order' => 1,
+                    'config' => ['prompt' => 'How many?', 'min_readings' => 5]],
+                ['name' => 'Run complete', 'type' => 'finish', 'order' => 2, 'config' => []],
+            ],
+        );
+
+        self::assertArrayNotHasKey('error', $result, json_encode($result));
+        $quest = $this->em->getRepository(Quest::class)->findOneBy(['name' => self::QUEST_PREFIX . 'broadcast']);
+        self::assertNotNull($quest);
+        self::assertSame(['ble.advertise'], $quest->getRequiredCapabilities());
+
+        // And the other copy must say the same thing about the same steps. Compared as a set, for
+        // the reason spelled out in testATrackedQuestWrittenThroughMcpNeedsThePoseCapability.
+        $preflight = (new QuestPreflight())->run(
+            ['steps' => [
+                ['name' => 'Before you start', 'type' => 'start', 'config' => ['features' => ['broadcast' => true]]],
+                ['name' => 'Count', 'type' => 'observe', 'config' => ['prompt' => 'How many?', 'min_readings' => 5]],
+            ]],
+            [],
+        );
+        $actual = $quest->getRequiredCapabilities();
+        $expected = $preflight['required_capabilities'];
+        sort($actual);
+        sort($expected);
+        self::assertSame($expected, $actual);
+    }
+
+    /**
+     * The tracked survey route, in miniature. Both derivation copies must gate it on `pose.track`
+     * and neither may reach for `lidar.mesh`: the mesh needs LiDAR and the trajectory does not, so
+     * a LiDAR gate would withhold the survey from every non-Pro iPhone that tracks perfectly well.
+     */
+    public function testATrackedQuestWrittenThroughMcpNeedsThePoseCapability(): void
+    {
+        $steps = [
+            ['name' => 'Before you start', 'type' => 'start', 'order' => 0,
+                'config' => ['features' => ['broadcast' => true, 'track' => true]]],
+            ['name' => '1. Scan, then hold still', 'type' => 'probe', 'order' => 1,
+                'config' => ['dwell_seconds' => 30, 'targets' => [[
+                    'value' => 'https://monad.dubec.dev/m/MONAD-FP-15',
+                    'label' => 'Fingerprint point 15', 'room' => 'library-open', 'kind' => 'card',
+                ]]]],
+        ];
+
+        $result = $this->tools->questWrite(
+            name: self::QUEST_PREFIX . 'tracked',
+            description: 'Survey route (tracked), in miniature.',
+            available_from: '2026-09-01T00:00:00+00:00',
+            steps: $steps,
+        );
+
+        self::assertArrayNotHasKey('error', $result, json_encode($result));
+        $quest = $this->em->getRepository(Quest::class)->findOneBy(['name' => self::QUEST_PREFIX . 'tracked']);
+        self::assertNotNull($quest);
+        self::assertContains('pose.track', $quest->getRequiredCapabilities());
+        self::assertNotContains('lidar.mesh', $quest->getRequiredCapabilities());
+
+        // The two copies must agree about the same steps; that invariant is what broke last time.
+        //
+        // Compared as SETS. Order is not the contract on either side — `Quest::isRunnableBy` uses
+        // `array_diff` and the handset uses `containsAll` — and the two copies legitimately build
+        // the list in different orders, because questWrite appends the start step's tokens after
+        // the loop while QuestPreflight appends them inside it. Pinning the sequence would fail on
+        // a harmless refactor and say nothing about what a phone is offered.
+        $preflight = (new QuestPreflight())->run(['steps' => $steps], []);
+        $actual = array_unique($quest->getRequiredCapabilities());
+        $expected = array_unique($preflight['required_capabilities']);
+        sort($actual);
+        sort($expected);
+        self::assertSame($expected, $actual);
+    }
+
+    public function testAQuestThatNeverBroadcastsDeclaresNothingThroughMcpEither(): void
+    {
+        $result = $this->tools->questWrite(
+            name: self::QUEST_PREFIX . 'quiet',
+            description: 'No radio role at all.',
+            available_from: '2026-09-01T00:00:00+00:00',
+            steps: [
+                ['name' => 'Before you start', 'type' => 'start', 'order' => 0,
+                    'config' => ['features' => ['broadcast' => false]]],
+                ['name' => 'Count', 'type' => 'observe', 'order' => 1,
+                    'config' => ['prompt' => 'How many?', 'min_readings' => 5]],
+            ],
+        );
+
+        self::assertArrayNotHasKey('error', $result, json_encode($result));
+        $quest = $this->em->getRepository(Quest::class)->findOneBy(['name' => self::QUEST_PREFIX . 'quiet']);
+        self::assertSame([], $quest?->getRequiredCapabilities());
     }
 
     public function testARenameKeepsTheStepsTheRunRecordsPointAt(): void

@@ -30,6 +30,7 @@ final class QuestHeaderData
         'ble.advertise',
         'background.residency',
         'camera.qr',
+        'pose.track',
         'lidar.mesh',
         'depth.coarse',
         'uwb.ranging',
