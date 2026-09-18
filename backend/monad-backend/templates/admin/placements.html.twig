@@ -46,16 +46,13 @@
                 <noscript><button type="submit" class="btn btn-secondary btn-sm">Go</button></noscript>
             </form>
         {% endif %}
-        <input type="search" placeholder="Filter rows (key, room, verdict, quest)" aria-label="Filter rows"
-               data-filter-for="#placements-table" data-filter-count="#placements-count">
-        <span class="count" id="placements-count">{{ rows|length }} rows</span>
         <a class="btn btn-secondary btn-sm" href="{{ path('admin_lab_placements_print', {floor: floor}) }}">Print sheet</a>
     </div>
 
     <div class="card mb-3">
         <div class="card-header">Mirror — {{ floor }}</div>
         <div class="table-responsive">
-            <table class="table table-sm table-dense placements-table mb-0" id="placements-table">
+            <table class="table table-sm table-dense placements-table mb-0" id="placements-table" data-datatable data-table-label="markers">
                 <thead>
                     <tr>
                         <th>Key</th>

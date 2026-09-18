@@ -15,10 +15,6 @@
     <div class="ui-section">
         <h2>Needs attention</h2>
         {{ ui.attention(attention) }}
-        {% if attention is not empty %}
-            <p class="ui-note">A line appears only while its count is above zero, so an empty list is the
-            statement that nothing is waiting, not a page that failed to load.</p>
-        {% endif %}
     </div>
 
     <div class="ui-section">
@@ -106,9 +102,13 @@
             {label: 'Bytes', align: 'right'},
             {label: 'Without sidecar', align: 'right'}
         ]) }}
-        <p class="ui-note">"Without sidecar" counts sessions whose streams landed and whose
-        <code>metadata.json</code> never arrived — an upload that stopped half way, not a session nobody
-        ran. Sessions uploaded before 2026-09-04 appear once <code>app:lab-sessions:backfill</code> has run.</p>
+        <p class="ui-note">Incomplete uploads have recording files but are missing their session summary.</p>
+        {{ ui.chart('weekly-runs', 'Run outcomes · last 7 days', [
+            {label: 'Completed', value: week.completed},
+            {label: 'In progress', value: week.in_progress},
+            {label: 'Abandoned', value: week.abandoned},
+            {label: 'Failed', value: week.failed}
+        ]) }}
     </div>
 
     <div class="ui-section">
@@ -128,4 +128,10 @@
              href: path('admin_lab')},
         ]) }}
     </div>
+{% endblock %}
+
+{% block body_javascript %}
+    {{ parent() }}
+    <script src="{{ asset('vendor/plotly.min.js') }}" defer></script>
+    <script src="{{ asset('admin-charts.js') }}" defer></script>
 {% endblock %}

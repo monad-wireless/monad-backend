@@ -4,8 +4,8 @@ namespace App\Controller\Admin;
 
 use App\Entity\BetaSignup;
 use App\Entity\User;
-use App\Enum\BetaPlatform;
 use App\Enum\BetaSignupStatus;
+use App\Join\InvitationDraft;
 use App\Repository\BetaSignupRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
@@ -16,7 +16,6 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Uid\Uuid;
-use Twig\Environment;
 
 /**
  * The onboarding desk (IP-157, Phase 5): beta signups from /join, worked by hand.
@@ -24,8 +23,8 @@ use Twig\Environment;
  * `#[AdminRoute]` on a plain controller for the reason QuestBuilderController gives. Every
  * write is a POST with a session CSRF token and redirects back to the same filter, so the
  * browser's back button never re-posts. There is no mail transport by the researcher's call
- * (proposal Q4): "Invite" is a `mailto:` with the invitation text prefilled, and "Mark invited"
- * beside it is the status change, because a click on a mailto: cannot be observed from here.
+ * (proposal Q4): an invitation downloads as .eml. "Mark invited" is a separate status change
+ * after the operator sends the message in their mail client.
  */
 #[IsGranted('ROLE_SUPERADMIN')]
 final class OnboardingController extends AbstractController
@@ -38,7 +37,7 @@ final class OnboardingController extends AbstractController
     public function __construct(
         private readonly BetaSignupRepository $signups,
         private readonly EntityManagerInterface $em,
-        private readonly Environment $twig,
+        private readonly InvitationDraft $drafts,
         private readonly string $apiBaseUrl,
     ) {
     }
@@ -49,7 +48,7 @@ final class OnboardingController extends AbstractController
         $statuses = $this->statusFilter($request);
         $rows = [];
         foreach ($this->signups->findByStatuses($statuses) as $signup) {
-            $rows[] = ['signup' => $signup, 'mailto' => $this->mailto($signup)];
+            $rows[] = ['signup' => $signup];
         }
 
         return $this->render('admin/onboarding.html.twig', [
@@ -58,6 +57,30 @@ final class OnboardingController extends AbstractController
             'statuses' => array_map(static fn (BetaSignupStatus $s) => $s->value, $statuses),
             'all_statuses' => array_map(static fn (BetaSignupStatus $s) => $s->value, BetaSignupStatus::cases()),
             'filter' => self::filterParam($statuses),
+        ]);
+    }
+
+    #[AdminRoute(path: '/people/onboarding/{id}/invitation.eml', name: 'people_onboarding_draft', options: ['methods' => ['GET']])]
+    public function draft(string $id): Response
+    {
+        $signup = Uuid::isValid($id) ? $this->signups->find(Uuid::fromString($id)) : null;
+        if (!$signup instanceof BetaSignup) {
+            throw $this->createNotFoundException('No beta signup with that id.');
+        }
+        $sender = $this->getUser();
+        if (!$sender instanceof User) {
+            throw $this->createAccessDeniedException();
+        }
+        if (!in_array($signup->getStatus(), [BetaSignupStatus::NEW, BetaSignupStatus::INVITED], true)) {
+            throw $this->createNotFoundException('This signup is no longer awaiting an invitation.');
+        }
+        $message = $this->drafts->create($signup, $sender, rtrim($this->apiBaseUrl, '/') . $this->generateUrl('privacy_policy'));
+
+        return new Response($message->toString(), Response::HTTP_OK, [
+            'Content-Type' => 'message/rfc822',
+            'Content-Disposition' => sprintf('attachment; filename="monadcount-invitation-%s.eml"', $signup->getId()),
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 
@@ -216,28 +239,4 @@ final class OnboardingController extends AbstractController
         return $statuses === [] ? 'all' : implode(',', array_map(static fn (BetaSignupStatus $s) => $s->value, $statuses));
     }
 
-    /**
-     * `mailto:` with subject and body from templates/join/invitation.txt.twig. Only for rows an
-     * invitation makes sense for; a scrubbed or registered row gets null and no link.
-     */
-    private function mailto(BetaSignup $signup): ?string
-    {
-        if (!in_array($signup->getStatus(), [BetaSignupStatus::NEW, BetaSignupStatus::INVITED], true)) {
-            return null;
-        }
-        $template = $this->twig->load('join/invitation.txt.twig');
-        $context = [
-            'name' => $signup->getName(),
-            'platform' => match ($signup->getPlatform()) {
-                BetaPlatform::IOS => 'iPhone',
-                BetaPlatform::ANDROID => 'Android',
-                BetaPlatform::UNSURE => 'iPhone or Android',
-            },
-            'privacy_url' => rtrim($this->apiBaseUrl, '/') . $this->generateUrl('privacy_policy'),
-        ];
-        $subject = trim($template->renderBlock('subject', $context));
-        $body = trim($template->renderBlock('body', $context));
-
-        return sprintf('mailto:%s?subject=%s&body=%s', rawurlencode($signup->getEmail()), rawurlencode($subject), rawurlencode($body));
-    }
 }

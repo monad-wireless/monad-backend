@@ -112,10 +112,20 @@ in realised order with `mono_ns` and skips, its recording sessions and their fig
 (`/admin/runs/handsets/{id}`), **Participant** (`/admin/people/{id}`), **Arming matrix** (quests ×
 nodes, unfiltered, through `App\Quest\ArmingMatrixBuilder` — the same builder the public JSON
 reads), **Fleet vitals** (`FleetMetricsReader`, `reachable: false` as a sentence) and **Quest
-analytics** (funnel, duration quantiles, skip reasons, failing steps, per node; inline SVG bars, no
-chart library). Every clock is the stored instant converted to `MONAD_ADMIN_TIMEZONE` (default
+analytics** (funnel, duration quantiles, skip reasons, failing steps, per node; Plotly charts with
+exact-value tables). Every clock is the stored instant converted to `MONAD_ADMIN_TIMEZONE` (default
 `Europe/Bratislava`) through the `clock` Twig filter, zone abbreviation beside it; never `strftime`
-on the UTC host. Look: `public/admin.css` — tables over cards, sharp corners.
+on the UTC host. Look: `public/admin.css` — comfortable tables, sharp corners. DataTables 3 powers
+custom lists; EasyAdmin registers retain server-side search, sorting and pagination. Vendored
+libraries and licences live in `public/vendor/`; charts load only on dashboard and analytics pages.
+All admin islands are deferred so their markup exists when they initialise.
+
+**Manual invitations.** The onboarding desk downloads a Slovak `.eml` through
+`GET /admin/people/onboarding/{id}/invitation.eml`, restricted to superadmins and new/invited
+signups. `App\Join\InvitationDraft` uses Symfony MIME plus `egulias/email-validator`; the sender
+is the signed-in operator and the recipient is the signup. There is no SMTP transport. Downloads
+are private/no-store and never change signup status. In Apple Mail open the file, then use
+Message → Send Again (⇧⌘D) to edit/send; mark invited separately after sending.
 
 **The walk figures come from monad-knowledge web, not from here.** The reduction that draws a walk
 lives in `monad_knowledge.walk`; re-implementing it in PHP would be a second reduction. The admin

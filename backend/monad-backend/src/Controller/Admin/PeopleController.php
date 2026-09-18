@@ -37,6 +37,7 @@ final class PeopleController extends AbstractController
 
         return $this->render('admin/people.html.twig', [
             'accounts' => $this->users->count([]),
+            'recent_accounts' => $this->users->findBy([], ['createdAt' => 'DESC'], 50),
             'signups_waiting' => ($counts['new'] ?? 0) + ($counts['invited'] ?? 0),
             'signups_total' => array_sum($counts),
             'users_url' => $this->adminUrls->setController(UserCrudController::class)->setAction('index')->generateUrl(),

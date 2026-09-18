@@ -7,6 +7,7 @@
 #}
 
 {% block content_title %}Participants{% endblock %}
+{% block page_actions %}<a class="ui-btn ui-btn-primary" href="{{ path('admin_people_onboarding') }}">Onboarding desk</a>{% endblock %}
 
 {% block main %}
     {{ ui.strip([
@@ -15,22 +16,29 @@
         {label: 'Waiting on a decision', value: signups_waiting, state: signups_waiting > 0 ? 'warn' : 'muted'},
     ]) }}
 
-    <div class="ui-section ui-prose">
-        <p>This is the shell for the Participants module and not the module. Phase 10 replaces this page
-        with one list over accounts and signups together — filtered by where a person stands in the
-        pipeline, signed up through invited, registered, first run, active — and one person page carrying
-        their runs, handsets, notifications and signup.</p>
+    <p class="ui-note">Invite new testers from the onboarding desk, or open an account to review their activity and manage access.</p>
 
-        <p>Until then the two surfaces that do the job are unchanged, and both are linked below. Nothing
-        was removed; what left was the menu entry, so this section has one door instead of two.</p>
+    <div class="ui-section">
+        <h2>Recent accounts <span class="more"><a href="{{ users_url }}">Search and manage all accounts</a></span></h2>
+        {% if accounts > recent_accounts|length %}<p class="ui-note">Showing the latest {{ recent_accounts|length }} of {{ accounts }} accounts.</p>{% endif %}
+        {% set rows = [] %}
+        {% for person in recent_accounts %}
+            {% set rows = rows|merge([{href: path('admin_participant', {id: person.id}), cells: [
+                ui.identity(person.name, person.email, path('admin_participant', {id: person.id})),
+                person.status|state_word,
+                person.isSuperAdmin ? 'Operator' : 'Participant',
+                ui.clock(person.createdAt),
+            ]}]) %}
+        {% endfor %}
+        {{ ui.table(rows, [{label: 'Participant', wrap: true}, {label: 'Status'}, {label: 'Access'}, {label: 'Joined'}], {datatable: true, label: 'accounts', empty: 'No accounts yet.'}) }}
     </div>
 
     <div class="ui-section">
-        <h2>Where the work is today</h2>
+        <h2>Manage participants</h2>
         {{ ui.table([
             {href: path('admin_people_onboarding'), cells: [
                 '<a href="' ~ path('admin_people_onboarding') ~ '">Onboarding desk</a>',
-                'Signups from /join: invite, mark invited, decline, withdraw, notes, CSV export.',
+                'Prepare invitations, follow up with testers and manage signup notes.',
                 signups_waiting > 0 ? '<span class="state state-warn">' ~ signups_waiting ~ ' waiting</span>' : ui.state('clear', 'muted'),
             ]},
             {href: users_url, cells: [

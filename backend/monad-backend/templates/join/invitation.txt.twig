@@ -1,27 +1,20 @@
-{#
-  The invitation the onboarding desk prefills into a mailto: (IP-157). Adapted from the retired
-  Google Form description (repos/monad-app/STUDENT-BETA-FORMS.md). Two fields in square brackets
-  are for the sender to fill before the mail goes: the expected time and what the task records
-  depend on the quest, and nothing here may invent either. Plain text: the .txt suffix turns Twig
-  autoescaping off.
-#}
-{% block subject %}MonadCount beta: an invitation{% endblock %}
+{% block subject %}Pozvánka na testovanie MonadCount{% endblock %}
 {% block body %}
-Hi {{ name ?? 'there' }},
+Ahoj{{ name ? ', ' ~ name : '' }},
 
-thanks for signing up for the MonadCount student beta. I can include you in the next round.
+ďakujem za záujem o testovanie aplikácie MonadCount. Rád by som ťa pozval do ďalšieho kola testovania na FIIT STU v Bratislave.
 
-MonadCount investigates how Wi-Fi and Bluetooth measurements can help us understand how busy a room is. The companion app runs a short measurement task at FIIT, and what I need from you is to try it and tell me how the app behaved. No experience with wireless sensing is needed. Bugs are welcome; they were probably coming anyway.
+V projekte skúmame, ako môžu merania Wi-Fi a Bluetooth pomôcť odhadnúť, koľko ľudí sa nachádza v miestnosti. Počas testovania si v aplikácii vyskúšaš meraciu úlohu a dáš mi vedieť, čo fungovalo a čo by sme mali zlepšiť. Nepotrebuješ žiadne skúsenosti s bezdrôtovými sieťami.
 
-There is nothing to install yet. A tester link for your phone ({{ platform }}) follows in a separate message once your place is confirmed.
+Zatiaľ nemusíš nič inštalovať. Po potvrdení účasti ti pošlem odkaz na inštaláciu pre {{ platform }} a dohodneme si konkrétny termín. Vopred ti upresním aj trvanie úlohy a údaje, ktoré sa pri nej zaznamenávajú. Informácie o spracovaní údajov nájdeš tu:
+{{ privacy_url }}
 
-What to expect:
-- Time: [expected time for this task]
-- Data recorded during the task: [what this task records]. What the app itself records is described in the privacy policy: {{ privacy_url }}
-- Where: FIIT STU, Bratislava. If you said you could only test remotely, I will say what is possible from home.
+Ak môžeš testovať iba na diaľku, napíš mi a dohodneme sa, čo sa dá vyskúšať z domu.
 
-Reply to this message if you would like to take part, or if your plans have changed. Questions go to jakub.dubec@stuba.sk.
+Stačí odpovedať na tento e-mail, či máš záujem. Pokojne sa ozvi aj s otázkami alebo ak sa tvoje plány zmenili.
 
-Jakub Dubec
+Ďakujem!
+{{ sender_name }}
 FIIT STU Bratislava
+{{ sender_email }}
 {% endblock %}

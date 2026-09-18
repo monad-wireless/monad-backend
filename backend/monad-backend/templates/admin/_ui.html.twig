@@ -157,7 +157,7 @@
 {%- macro attention(items) -%}
     <div class="attention">
         {%- for i in items -%}
-            <a class="row state-{{ i.state|default('muted') }}" href="{{ i.href }}">
+            <a class="attention-item state-{{ i.state|default('muted') }}" href="{{ i.href }}">
                 <span class="n">{{ i.count is defined and i.count is not null ? i.count : '·' }}</span>
                 <span class="what">{{ i.text }}</span>
             </a>
@@ -169,10 +169,10 @@
 
 {%- macro table_start(columns, options = {}) -%}
     <div class="ui-table-wrap">
-    <table class="ui-table {{ options.class|default('') }}"{% if options.id is defined %} id="{{ options.id }}"{% endif %}>
+    <table class="ui-table {{ options.class|default('') }}"{% if options.datatable|default(false) %} data-datatable data-table-label="{{ options.label|default('records') }}"{% endif %}{% if options.id is defined %} id="{{ options.id }}"{% endif %}>
         <thead><tr>
             {%- for c in columns -%}
-                <th class="{{ c.align|default('left') == 'right' ? 'num' : '' }} {{ c.wrap|default(false) ? 'wrap' : '' }} {{ c.class|default('') }}"{% if c.width is defined %} style="width:{{ c.width }}"{% endif %}>{{ c.label }}</th>
+                <th scope="col" class="{{ c.align|default('left') == 'right' ? 'num' : '' }} {{ c.wrap|default(false) ? 'wrap' : '' }} {{ c.class|default('') }}"{% if c.width is defined %} style="width:{{ c.width }}"{% endif %}>{{ c.label }}</th>
             {%- endfor -%}
         </tr></thead>
         <tbody>
@@ -196,7 +196,7 @@
         {%- for r in rows -%}
             {%- set cells = r.cells is defined ? r.cells : r -%}
             {%- set href = r.href is defined ? r.href : null -%}
-            <tr class="{{ href is not null ? 'clickable' : '' }} {{ r.class is defined ? r.class : '' }}"{% if href is not null %} data-row-href="{{ href }}"{% endif %}>
+            <tr class="{{ href is not null ? 'clickable' : '' }} {{ r.class is defined ? r.class : '' }}"{% if href is not null %} tabindex="0" data-row-href="{{ href }}"{% endif %}>
                 {{- _self.cells(cells, columns) -}}
             </tr>
         {%- else -%}
@@ -247,4 +247,27 @@
 
 {%- macro id(uuid) -%}
     <span class="short-id" title="{{ uuid }}">{{ uuid|short_id }}</span>
+{%- endmacro -%}
+
+{%- macro chart(id, title, rows, unit = 'Runs') -%}
+    <figure class="ui-chart-frame">
+        <h2>{{ title }}</h2>
+        <div id="{{ id }}" class="ui-chart" role="img" aria-label="{{ title }}. Exact values in the table below." data-admin-chart="{{ rows|json_encode|e('html_attr') }}" data-axis-label="{{ unit }}"></div>
+        <details>
+            <summary>View exact values</summary>
+            <table class="ui-table" data-static-table>
+                <thead><tr><th scope="col">Category</th><th scope="col" class="num">{{ unit }}</th></tr></thead>
+                <tbody>{% for row in rows %}<tr><td>{{ row.label }}</td><td class="num">{{ row.value is null ? 'Not reported' : row.value }}</td></tr>{% else %}<tr><td colspan="2">No observations available yet.</td></tr>{% endfor %}</tbody>
+            </table>
+        </details>
+        <figcaption>Recorded counts. Hover over a bar for its value; use the camera button to save the chart.</figcaption>
+    </figure>
+{%- endmacro -%}
+
+{%- macro hidden_query(name, value) -%}
+    {% if value is iterable %}
+        {% for key, child in value %}{{ _self.hidden_query(name ~ '[' ~ key ~ ']', child) }}{% endfor %}
+    {% else %}
+        <input type="hidden" name="{{ name }}" value="{{ value }}">
+    {% endif %}
 {%- endmacro -%}

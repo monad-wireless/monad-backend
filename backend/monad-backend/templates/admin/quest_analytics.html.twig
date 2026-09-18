@@ -1,5 +1,8 @@
 {% extends '@EasyAdmin/page/content.html.twig' %}
-{% import 'admin/_macros.html.twig' as m %}
+{% import 'admin/_ui.html.twig' as ui %}
+
+{% set mc_active = 'admin_lab_quests' %}
+{% block breadcrumb %}<a href="{{ path('admin_lab_quests') }}">Quests</a> / Analytics{% endblock %}
 
 {% block content_title %}{{ quest.name }} — analytics{% endblock %}
 
@@ -18,7 +21,7 @@
             <div class="card mb-3">
                 <div class="card-header">Funnel</div>
                 <div class="card-body">
-                    {{ m.bars([
+                    {{ ui.chart('quest-outcomes', 'Started runs and their outcomes', [
                         {label: 'started', value: f.started},
                         {label: 'completed', value: f.completed},
                         {label: 'abandoned', value: f.abandoned},
@@ -40,7 +43,7 @@
                             <span><span class="k">p50</span>{{ analytics.quantiles.p50|duration }}</span>
                             <span><span class="k">p90</span>{{ analytics.quantiles.p90|duration }}</span>
                         </div>
-                        {{ m.bars(histogram) }}
+                        {{ ui.chart('quest-duration', 'Completed run duration', histogram) }}
                         <p class="text-muted small mb-0 mt-2">Twelve equal bins from the shortest to the longest completed run. Start is the enrollment's creation on the server; end is the completion time the client reported. Spans under zero or over a day are clock artefacts and are excluded.</p>
                     {% elseif analytics.durations is not empty %}
                         <p class="small mb-0">Fewer than three completed runs: {{ analytics.durations|map(d => d|duration)|join(', ') }}. No quantiles from so few.</p>
@@ -57,7 +60,7 @@
             <div class="card mb-3">
                 <div class="card-header">Skip reasons</div>
                 <div class="card-body">
-                    {{ m.bars(analytics.skip_reasons|map(r => {label: r.error_code, value: r.n})) }}
+                    {{ ui.chart('quest-skips', 'Reported skip reasons', analytics.skip_reasons|map(r => {label: r.error_code, value: r.n}), 'Skips') }}
                 </div>
             </div>
         </div>
@@ -112,4 +115,10 @@
             <p class="text-muted small mb-0">A run of skips at one step across handsets is a broken step config, not eight broken participants.</p>
         </div>
     </div>
+{% endblock %}
+
+{% block body_javascript %}
+    {{ parent() }}
+    <script src="{{ asset('vendor/plotly.min.js') }}" defer></script>
+    <script src="{{ asset('admin-charts.js') }}" defer></script>
 {% endblock %}

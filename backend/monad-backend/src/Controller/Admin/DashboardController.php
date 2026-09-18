@@ -29,6 +29,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Assets;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Asset;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
@@ -478,20 +479,21 @@ class DashboardController extends AbstractDashboardController
 
     public function configureAssets(): Assets
     {
-        // admin.css carries the site tokens and is loaded after the theme so every rule wins by
-        // order. The four per-lane pairs (IP-157) are empty in Phase 1 and are owned by the lane
-        // named in each file's header; registering them here means a lane adds rules, not wiring.
+        // Vendor styling precedes our tokens. Defer keeps the shared tables and page islands
+        // in dependency order and waits for the markup they enhance.
         return Assets::new()
+            ->addCssFile('vendor/datatables/dataTables.dataTables.min.css')
             ->addCssFile('admin.css')
-            ->addJsFile('admin-ui.js')
+            ->addJsFile(Asset::new('vendor/datatables/dataTables.min.js')->defer())
+            ->addJsFile(Asset::new('admin-ui.js')->defer())
             ->addCssFile('admin-quests.css')
             ->addCssFile('admin-placements.css')
             ->addCssFile('admin-notifications.css')
             ->addCssFile('admin-onboarding.css')
-            ->addJsFile('admin-quests.js')
-            ->addJsFile('admin-placements.js')
-            ->addJsFile('admin-notifications.js')
-            ->addJsFile('admin-onboarding.js');
+            ->addJsFile(Asset::new('admin-quests.js')->defer())
+            ->addJsFile(Asset::new('admin-placements.js')->defer())
+            ->addJsFile(Asset::new('admin-notifications.js')->defer())
+            ->addJsFile(Asset::new('admin-onboarding.js')->defer());
     }
 
     /**

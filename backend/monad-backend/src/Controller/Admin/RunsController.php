@@ -38,7 +38,7 @@ final class RunsController extends AbstractController
     public function index(): Response
     {
         return $this->render('admin/runs.html.twig', [
-            'recent' => $this->enrollments->findRecent(10),
+            'recent' => $this->enrollments->findRecent(100),
             'runs_total' => $this->enrollments->count([]),
             'sessions_total' => $this->sessions->count([]),
             'enrollments_url' => $this->crudUrl(QuestEnrollment::class),

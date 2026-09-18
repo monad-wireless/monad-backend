@@ -14,19 +14,15 @@
         {label: 'Recording sessions', value: sessions_total},
     ]) }}
 
-    <div class="ui-section ui-prose">
-        <p>This is the shell for the Runs module and not the module. Phase 9 makes the enrollment the
-        record: one list with filters over state, quest, participant, date and platform, one run page that
-        folds in its recording sessions, handset snapshot, ground-truth scans and skips, and a data-quality
-        tab for uploads with no sidecar, sessions with no enrollment, E3 conflicts and failed pushes.</p>
-
-        <p>Nine entries used to sit in the menu here, seven of them a raw table of one entity. They are
-        listed below instead, marked for what they are — a reading page is designed for a question, a
-        register is the table as it is stored — so nobody mistakes the second for the first.</p>
+    <div class="ui-toolbar">
+        <p class="ui-note">Review recent activity, or search the full run and recording registers.</p>
+        <a class="ui-btn" href="{{ enrollments_url }}">Search all runs</a>
+        <a class="ui-btn" href="{{ sessions_url }}">Recording sessions</a>
     </div>
 
     <div class="ui-section">
-        <h2>Last ten runs</h2>
+        <h2>Recent runs</h2>
+        {% if runs_total > recent|length %}<p class="ui-note">Search covers the latest {{ recent|length }} of {{ runs_total }} runs. Use <a href="{{ enrollments_url }}">Search all runs</a> for the full history.</p>{% endif %}
         {% set rows = [] %}
         {% for e in recent %}
             {% set rows = rows|merge([{
@@ -48,11 +44,11 @@
             {label: 'Node'},
             {label: 'State'},
             {label: 'Completed'}
-        ], {empty: 'No run yet. A row appears when someone starts a quest.'}) }}
+        ], {empty: 'No run yet. A row appears when someone starts a quest.', datatable: true, label: 'recent runs'}) }}
     </div>
 
     <div class="ui-section">
-        <h2>Everything this section will absorb</h2>
+        <h2>Explore recordings</h2>
         {{ ui.table([
             {href: enrollments_url, cells: ['<a href="' ~ enrollments_url ~ '">Enrollments</a>', ui.state('register', 'muted'), 'One row per run. Status and device are editable; nothing else is.']},
             {href: sessions_url, cells: ['<a href="' ~ sessions_url ~ '">Recording sessions</a>', ui.state('register', 'muted'), 'One row per session the app uploaded. Written by the upload path, never by a form.']},
@@ -63,8 +59,6 @@
             {label: 'Kind'},
             {label: 'What it holds', wrap: true}
         ]) }}
-        <p class="ui-note">Handsets, ground-truth scans, scan conflicts, step completions and skip records
-        are reached from the run and session pages that name them, which is where they mean something. Their
-        own registers are still routable; they stopped being a menu entry.</p>
+
     </div>
 {% endblock %}

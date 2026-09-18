@@ -30,6 +30,7 @@
     - `mc_active`   — a rail entry's route name, when longest-prefix matching would miss.
 #}
 {% set ea = ea() %}
+{% import 'admin/_ui.html.twig' as ui %}
 {% trans_default_domain ea.i18n.translationDomain %}
 
 {% set _path = app.request.pathinfo %}
@@ -45,13 +46,13 @@
 {% set _forced = mc_active|default(
     _crud_fqcn is null ? null : (
         _crud_fqcn == 'App\\Entity\\Device' ? 'admin_lab'
-        : (_crud_fqcn == 'App\\Entity\\User' ? 'admin_settings' : 'admin_runs')
+        : (_crud_fqcn == 'App\\Entity\\User' ? 'admin_people' : 'admin_runs')
     )
 ) %}
 {% set _best = '' %}
 {% if _forced is null %}
     {% for item in _menu %}
-        {% set _u = (item.linkUrl ?? '')|split('?')|first %}
+        {% set _u = (item.linkUrl ?? '')|replace({(app.request.schemeAndHttpHost): ''})|split('?')|first %}
         {% if _u != '' and _u != '/admin' and (_path == _u or _path starts with _u ~ '/') and _u|length > _best|length %}
             {% set _best = _u %}
         {% endif %}
@@ -131,6 +132,7 @@
 {% block javascript_page_color_scheme %}{% endblock javascript_page_color_scheme %}
 
 {% block wrapper_wrapper %}
+<a class="mc-skip" href="#main">Skip to content</a>
 <div class="mc-shell">
     {% block wrapper %}
     <aside class="mc-rail">
@@ -145,7 +147,7 @@
             <nav class="mc-nav" aria-label="Sections">
                 {% for item in _menu %}
                     {% if not item.isMenuSection %}
-                        {% set _u = (item.linkUrl ?? '')|split('?')|first %}
+                        {% set _u = (item.linkUrl ?? '')|replace({(app.request.schemeAndHttpHost): ''})|split('?')|first %}
                         {% set _active = _forced is not null
                             ? (item.routeName == _forced)
                             : (_best != '' ? _u == _best : (_u == '/admin' and _path == '/admin')) %}
@@ -156,7 +158,7 @@
             {% endblock main_menu_wrapper %}
 
             <div class="mc-rail-foot">
-                Every clock on this interface is <code>{{ admin_timezone() }}</code>, 24 hour, converted from the stored instant.
+                Local time<br><strong>{{ admin_timezone() }}</strong>
             </div>
         {% endblock sidebar %}
     </aside>
@@ -205,7 +207,17 @@
 
         {% block content %}
         <main class="mc-content">
-            <section id="main" class="content-body">
+            <section id="main" class="content-body" tabindex="-1">
+                {% if ea.crud is not null and ea.crud.currentAction == 'index' %}
+                    <form method="get" class="ui-crud-search" role="search">
+                        {% for name, value in app.request.query.all %}
+                            {% if name not in ['query', 'page'] %}{{ ui.hidden_query(name, value) }}{% endif %}
+                        {% endfor %}
+                        <label for="crud-query">Search all records</label>
+                        <input id="crud-query" type="search" name="query" value="{{ app.request.query.get('query', '') }}" placeholder="Search records…">
+                        <button class="ui-btn ui-btn-primary" type="submit">Search</button>
+                    </form>
+                {% endif %}
                 {% block main %}{% endblock %}
             </section>
 
