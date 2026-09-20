@@ -46,13 +46,19 @@ mcp:
            `monad-knowledge lab quest-build` rather than hand-author it: that command reads the
            positions out of PostGIS, so a card that moves costs a regenerate, not a hand edit
            nothing checks.
-        5. To HIDE a quest or change its timing, use lab_quest_update — never
-           lab_quest_write. Write replaces the step rows, and quest_step_completions
-           point at those rows, so the database refuses it for any quest somebody has
-           run. lab_quest_update touches the quest row only: `available_to: "now"`
-           hides one, `"never"` re-opens it, and points / description / duration go the
-           same way. lab_quest_list reports a computed `status` (live / scheduled /
-           hidden) so nothing has to compare two timestamps by hand.
+        5. lab_quest_write REPLACES a quest in place, including one that has been run.
+           Since 2026-09-20 every enrollment freezes the steps it was served
+           (`quest_step_completions.step_snapshot`), so a finished run reports what it
+           actually asked of the person who walked it however the quest changes later.
+           Edit a quest; do not publish a second generation of it. The catalogue's
+           "(retired 2026-08)" duplicates exist only because the old schema refused an
+           edit, and nothing needs that workaround now.
+           Use lab_quest_update when only the quest ROW changes — it does not touch the
+           steps, so it is the cheaper call and the one that cannot renumber anything.
+           `available_to: "now"` hides a quest, `"never"` re-opens it, and points /
+           description / duration go the same way. lab_quest_list reports a computed
+           `status` (live / scheduled / hidden) so nothing has to compare two timestamps
+           by hand.
         6. The identity broadcast is session-scoped and every feature defaults to OFF. Declare
            it once on the start step: config.features {broadcast, track, witness, illuminator}.
            A probe quest without features.broadcast records dwells with nothing on air, and the

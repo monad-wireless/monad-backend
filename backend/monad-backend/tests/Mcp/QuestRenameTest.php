@@ -24,8 +24,11 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
  *
  * A live quest's name is the one string a participant reads before deciding to run it, and the
  * only way to change it used to be the admin form: `lab_quest_write` replaces the step rows a
- * completion points at, so it is unusable on any quest somebody has already run — which is every
- * quest worth renaming.
+ * completion points at, which the database refused for any quest somebody had already run —
+ * which is every quest worth renaming. That refusal is gone since 2026-09-20 (completions carry
+ * their own `step_snapshot` and `step_id` is ON DELETE SET NULL, see QuestWriteOverRunsTest), so
+ * a rewrite is now a legal way to rename. `lab_quest_update` remains the right tool for it: it
+ * touches the quest row only, so it cannot renumber a step or disturb a run in flight.
  *
  * Two properties carry the tool and both need the database. A rename must survive a quest holding
  * run records, which is what `lab_quest_delete` refuses and what a double cannot reproduce. And a

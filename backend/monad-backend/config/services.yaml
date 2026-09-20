@@ -171,3 +171,16 @@ services:
     # cannot express.
     App\Notification\PushSender:
         factory: ['@App\Notification\PushSenderFactory', 'create']
+
+    # Make a log record's context visible (2026-09-20). This project has no Monolog, so
+    # `logger` is Symfony's fallback, whose formatter interpolates only `{placeholders}`
+    # written into the message and throws the rest away. Every library that logs the
+    # PSR-3 way — an exception under an `exception` key, ids under their own keys — was
+    # therefore logging into a void: the MCP SDK reported a failed tool call as one line
+    # reading "Unhandled error during tool execution", with the exception discarded.
+    #
+    # Decorating rather than replacing, so this composes with whatever `logger` is: add
+    # Monolog later and delete this block, and no log line changes shape in between.
+    App\Log\ContextRenderingLogger:
+        decorates: 'logger'
+        arguments: ['@.inner']

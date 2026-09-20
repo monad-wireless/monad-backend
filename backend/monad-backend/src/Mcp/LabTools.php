@@ -13,6 +13,7 @@ use App\Service\LabConfigService;
 use App\Service\MarkerService;
 use Doctrine\ORM\EntityManagerInterface;
 use Mcp\Capability\Attribute\McpTool;
+use Mcp\Exception\ToolCallException;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
@@ -361,7 +362,15 @@ class LabTools
             }
             // The DELETEs have to reach the database before the replacements are inserted:
             // (quest_id, order) is unique, and Doctrine emits INSERTs first within one flush.
-            $this->entityManager->flush();
+            //
+            $this->flushOrExplain(
+                sprintf('Replacing the steps of "%s"', $name),
+                'Historically this meant the quest had been run and quest_step_completions '
+                . 'pointed at the rows being deleted. Since 2026-09-20 completions carry their '
+                . 'own step_snapshot and step_id is ON DELETE SET NULL, so a still-failing write '
+                . 'on a quest that has runs means Version20260920180000 has not reached this '
+                . 'container.',
+            );
         }
 
         foreach ($built as $step) {
@@ -394,7 +403,10 @@ class LabTools
         $quest->setRequiredCapabilities($requiredCapabilities);
 
         $this->entityManager->persist($quest);
-        $this->entityManager->flush();
+        // A separate flush from the step deletion above, and a separate failure: this one
+        // inserts the new steps and the quest row, so a unique (quest_id, order) collision
+        // or an over-long name lands here rather than there.
+        $this->flushOrExplain(sprintf('Writing quest "%s"', $name));
 
         return [
             'action' => $existed ? 'replaced' : 'created',
@@ -403,6 +415,50 @@ class LabTools
             'warnings' => $warnings,
             'markers' => array_column($this->markers->markers(), 'value'),
         ];
+    }
+
+    /**
+     * Flush, and say WHY when the database refuses.
+     *
+     * Every write tool here ends in a flush, and a constraint violation escaping one is the
+     * most useful error this class can produce — it is the database explaining that the
+     * write contradicts something real. The MCP SDK's catch-all turns any escaping Throwable
+     * into a bare "Error while executing tool" for the caller and, before
+     * {@see \App\Log\ContextRenderingLogger}, one contextless line in the log. On 2026-09-20
+     * that combination cost an evening: a foreign key on `quest_step_completions` was read as
+     * a payload-size ceiling, and three wrong theories were tested before the constraint was
+     * found written in this server's own instructions.
+     *
+     * {@see \Mcp\Exception\ToolCallException} is the one exception class the SDK renders back
+     * to the caller instead of swallowing, so the reason reaches whoever made the call rather
+     * than only the log nobody is tailing.
+     *
+     * `$hint` carries what the message alone will not tell a reader: which constraint is
+     * likely, and what to do. Leave it empty when the driver message is self-explaining —
+     * a guessed hint on an unexpected failure is worse than none.
+     */
+    private function flushOrExplain(string $attempt, string $hint = ''): void
+    {
+        try {
+            $this->entityManager->flush();
+        } catch (\Throwable $e) {
+            throw $this->explain($e, $attempt, $hint);
+        }
+    }
+
+    /**
+     * The exception the caller should see, built from the one the database threw.
+     *
+     * Separate from {@see flushOrExplain} because a write is not always one flush:
+     * `placementsWrite` runs a delete and a flush inside `wrapInTransaction`, and the guard
+     * has to sit outside that call to cover both halves and the rollback.
+     */
+    private function explain(\Throwable $e, string $attempt, string $hint = ''): ToolCallException
+    {
+        return new ToolCallException(
+            rtrim(sprintf('%s failed: %s %s', $attempt, $e->getMessage(), $hint)),
+            previous: $e,
+        );
     }
 
     /** @return array<string, mixed> */
@@ -415,7 +471,12 @@ class LabTools
         }
 
         $this->entityManager->remove($quest);
-        $this->entityManager->flush();
+        $this->flushOrExplain(
+            sprintf('Deleting quest "%s"', $name),
+            'A quest that has been run is referenced by quest_enrollments, which is NOT set to '
+            . 'cascade: deleting it would take the runs with it, so the database refuses. Hide '
+            . 'it instead with lab_quest_update available_to: "now".',
+        );
 
         return ['deleted' => $name];
     }
@@ -589,7 +650,11 @@ class LabTools
             return ['error' => 'Nothing to change. Pass at least one field.'];
         }
 
-        $this->entityManager->flush();
+        $this->flushOrExplain(
+            sprintf('Updating quest "%s"', $name),
+            'A rename onto a name another quest already holds is the usual cause: every read '
+            . 'here is findOneBy(name), so duplicates are refused rather than made ambiguous.',
+        );
 
         return [
             // The name as it stands after the call. A receipt that echoed the lookup name would
@@ -800,29 +865,42 @@ class LabTools
         /** @var LabPlacementRepository $repository */
         $repository = $this->entityManager->getRepository(LabPlacement::class);
 
-        $this->entityManager->wrapInTransaction(function () use ($repository, $floor, $layer_cards, $layer_nodes, $clean, $syncId, $syncedAt): void {
-            // The DELETE reaches the database inside this transaction, before the INSERTs of
-            // the same flush: (floor, key) is unique and Doctrine emits inserts first otherwise.
-            $repository->deleteFloor($floor);
-            foreach ($clean as $row) {
-                $placement = new LabPlacement(
-                    $row['key'],
-                    $row['kind'],
-                    $floor,
-                    $row['kind'] === LabPlacement::KIND_CARD ? trim($layer_cards) : trim($layer_nodes),
-                    $row['x_m'],
-                    $row['y_m'],
-                    $syncId,
-                    $syncedAt,
-                );
-                $placement->setRoom($row['room'])
-                    ->setZCm($row['z_cm'])
-                    ->setProvenance($row['provenance'])
-                    ->setSourceUpdatedAt($row['source_updated_at']);
-                $this->entityManager->persist($placement);
-            }
-            $this->entityManager->flush();
-        });
+        // Guarded OUTSIDE the transaction so the delete, the inserts and the rollback are all
+        // covered: a mirror that half-replaced a floor and reported nothing is the failure
+        // this has to be able to describe.
+        try {
+            $this->entityManager->wrapInTransaction(function () use ($repository, $floor, $layer_cards, $layer_nodes, $clean, $syncId, $syncedAt): void {
+                // The DELETE reaches the database inside this transaction, before the INSERTs
+                // of the same flush: (floor, key) is unique and Doctrine emits inserts first
+                // otherwise.
+                $repository->deleteFloor($floor);
+                foreach ($clean as $row) {
+                    $placement = new LabPlacement(
+                        $row['key'],
+                        $row['kind'],
+                        $floor,
+                        $row['kind'] === LabPlacement::KIND_CARD ? trim($layer_cards) : trim($layer_nodes),
+                        $row['x_m'],
+                        $row['y_m'],
+                        $syncId,
+                        $syncedAt,
+                    );
+                    $placement->setRoom($row['room'])
+                        ->setZCm($row['z_cm'])
+                        ->setProvenance($row['provenance'])
+                        ->setSourceUpdatedAt($row['source_updated_at']);
+                    $this->entityManager->persist($placement);
+                }
+                $this->entityManager->flush();
+            });
+        } catch (\Throwable $e) {
+            throw $this->explain(
+                $e,
+                sprintf('Writing the placement mirror for floor "%s"', $floor),
+                'The whole floor is replaced in one transaction, so the mirror is unchanged. '
+                . 'A duplicate key in the payload is the usual cause: (floor, key) is unique.',
+            );
+        }
 
         $cards = array_values(array_filter($clean, static fn (array $r): bool => $r['kind'] === LabPlacement::KIND_CARD));
         $nodes = array_values(array_filter($clean, static fn (array $r): bool => $r['kind'] === LabPlacement::KIND_NODE));

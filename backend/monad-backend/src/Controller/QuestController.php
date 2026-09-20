@@ -536,6 +536,13 @@ class QuestController extends AbstractController
             $stepCompletion = new QuestStepCompletion();
             $stepCompletion->setEnrollment($enrollment);
             $stepCompletion->setStep($step);
+            // Freeze what this walker was actually asked to do, at the position they were
+            // asked to do it. The run carries its own configuration from here on, so the
+            // quest can be rewritten afterwards and this run still reports itself
+            // truthfully. Before this the step ROW was the record, which is why rewriting
+            // a quest with runs was refused outright and the catalogue grew retired
+            // generations instead of being edited.
+            $stepCompletion->snapshotStep($step, $index);
 
             $enrollment->addStepCompletion($stepCompletion);
             $entityManager->persist($stepCompletion);
