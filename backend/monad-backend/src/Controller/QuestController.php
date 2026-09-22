@@ -18,6 +18,8 @@ use App\Entity\QuestStepSkipRecord;
 use App\Entity\User;
 use App\Enum\QuestEnrollmentStatus;
 use App\Enum\QuestStepCompletionStatus;
+use App\Lab\Contract\CountingContracts;
+use App\Lab\Evidence\SweepReceiptService;
 use App\Quest\HandsetDescriptor;
 use App\Quest\HandsetRegistry;
 use App\Quest\QuestArmingService;
@@ -131,6 +133,7 @@ class QuestController extends AbstractController
             // withheld rather than offered and failed halfway through. Sending nothing keeps the
             // old behaviour (everything is offered), so existing clients are unaffected.
             $declared = $request->query->get('capabilities');
+            $deviceCapabilities = [];
             if (is_string($declared) && '' !== trim($declared)) {
                 $deviceCapabilities = array_values(array_filter(array_map(
                     'trim',
@@ -141,6 +144,14 @@ class QuestController extends AbstractController
                     static fn ($quest) => $quest->isSupportedBy($deviceCapabilities)
                 ));
             }
+            // IP-162: the room-sweep contract is withheld even from a client that declares
+            // nothing. "Nothing declared" is a build that predates capability reporting, and
+            // such a build would render a sweep step as five partial views. Every other
+            // capability keeps the old rule above, so legacy quests stay offered to legacy clients.
+            $quests = array_values(array_filter(
+                $quests,
+                static fn ($quest) => !$quest->requiresRoomSweep() || in_array(CountingContracts::CAPABILITY_ROOM_SWEEP, $deviceCapabilities, true)
+            ));
 
             // Transform entities to DTOs
             $questDtos = array_map(
@@ -413,6 +424,26 @@ class QuestController extends AbstractController
             return $this->json([
                 'error' => 'Quest not found'
             ], Response::HTTP_NOT_FOUND);
+        }
+
+        // Capability gate at START (IP-162). The listing filter is a convenience; this is the
+        // authorisation. What the handset can do is read from the IP-149 descriptor's
+        // `capabilities` list and from a `capabilities` query parameter, unioned. A quest that
+        // needs the room-sweep contract is refused to a client that declares nothing at all,
+        // because "nothing" is a build that predates the contract and would misread the step;
+        // every other capability is enforced only against an explicit declaration, which keeps
+        // legacy quests startable by legacy clients exactly as before.
+        $declaredCapabilities = self::declaredCapabilities($request, $handsetDescriptor);
+        $missing = $quest->missingCapabilities($declaredCapabilities);
+        $refuse = $quest->requiresRoomSweep()
+            ? $missing !== []
+            : ($declaredCapabilities !== [] && $missing !== []);
+        if ($refuse) {
+            return $this->json([
+                'error' => 'This handset does not report a capability the quest requires',
+                'reason' => QuestAvailability::REASON_CAPABILITY_MISSING,
+                'missing_capabilities' => $missing,
+            ], Response::HTTP_CONFLICT);
         }
 
         // Validate quest is active
@@ -689,7 +720,8 @@ class QuestController extends AbstractController
         string $quest_id,
         Request $request,
         EntityManagerInterface $entityManager,
-        ValidatorInterface $validator
+        ValidatorInterface $validator,
+        SweepReceiptService $sweepReceipts
     ): JsonResponse {
         $user = $this->getUser();
         if (!$user instanceof User) {
@@ -783,8 +815,26 @@ class QuestController extends AbstractController
                 ], Response::HTTP_FORBIDDEN);
             }
 
-            // 3. Verify enrollment status is in_progress
+            // 3. Verify enrollment status is in_progress.
+            //
+            // IP-162: an IDENTICAL retry of an already accepted completion returns the same
+            // receipt rather than a 409 — the app retries a completion whose response it never
+            // saw, and a retry must not read as a conflict. Identical means every step's status
+            // and step_data equal what was stored; anything else is a different claim about the
+            // same run and stays a conflict. Points were frozen by the first acceptance and
+            // `awardPoints()` is idempotent, so nothing is paid twice.
             if ($enrollment->getStatus() !== QuestEnrollmentStatus::IN_PROGRESS) {
+                if ($enrollment->getStatus() === QuestEnrollmentStatus::COMPLETED
+                    && self::isIdenticalReplay($enrollment, $requestDto->steps)) {
+                    $entityManager->rollback();
+
+                    return $this->json((new QuestCompleteResponseDto(
+                        success: true,
+                        enrollment_id: $enrollment->getId()->toString(),
+                        points_earned: $enrollment->getPointsAwarded() ?? $enrollment->getQuest()->getPoints(),
+                        completed_at: $enrollment->getCompletedAt()?->format('Y-m-d\TH:i:s\Z') ?? '',
+                    ))->toArray(), Response::HTTP_OK);
+                }
                 $entityManager->rollback();
                 return $this->json([
                     'error' => 'Enrollment is already ' . $enrollment->getStatus()->value
@@ -861,6 +911,26 @@ class QuestController extends AbstractController
                 // wall clock is user-adjustable.
                 $stepCompletion->setMonoNs($stepDto->mono_ns);
                 $stepCompletion->setStepData($stepDto->step_data);
+
+                // IP-162: a room-sweep step's step_data is a typed summary that points at the
+                // uploaded evidence. It is validated against THIS completion's frozen snapshot
+                // (same protocol digest, same step, an offered room) and lands as a reference
+                // receipt, pending until the recording's seal reconciles it. A summary that
+                // contradicts the snapshot fails the completion: a count filed under the wrong
+                // protocol is worse than no completion. A completed sweep step with no summary
+                // at all is refused for the same reason.
+                if ($status === QuestStepCompletionStatus::COMPLETED && SweepReceiptService::isSweepStep($stepCompletion)) {
+                    $problems = $sweepReceipts->recordCompletion($stepCompletion, $stepDto->step_data);
+                    if ($problems !== []) {
+                        $entityManager->rollback();
+
+                        return $this->json([
+                            'error' => 'Sweep summary rejected',
+                            'step_completion_id' => $stepDto->step_completion_id,
+                            'details' => $problems,
+                        ], Response::HTTP_UNPROCESSABLE_ENTITY);
+                    }
+                }
 
                 // Create skip record if needed
                 if (in_array($status, [QuestStepCompletionStatus::FAILED, QuestStepCompletionStatus::SKIPPED])) {
@@ -953,5 +1023,58 @@ class QuestController extends AbstractController
                 'message' => $e->getMessage()
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * What the handset says it can do, at start (IP-162): the IP-149 descriptor's `capabilities`
+     * list unioned with a `capabilities` query parameter (comma-separated, as the listing takes
+     * it). Empty when neither was sent.
+     *
+     * @return list<string>
+     */
+    private static function declaredCapabilities(Request $request, ?HandsetDescriptor $handset): array
+    {
+        $tokens = [];
+        $query = $request->query->get('capabilities');
+        if (is_string($query) && trim($query) !== '') {
+            $tokens = array_map('trim', explode(',', $query));
+        }
+        if ($handset !== null) {
+            $declared = $handset->toArray()['capabilities'] ?? [];
+            if (is_array($declared)) {
+                $tokens = array_merge($tokens, array_filter($declared, 'is_string'));
+            }
+        }
+
+        return array_values(array_unique(array_filter($tokens, static fn (string $t) => $t !== '')));
+    }
+
+    /**
+     * Whether a completion request repeats what an already completed enrollment stored: every
+     * named step with the same status and the same step_data. Steps the request does not name
+     * are not compared; a request naming a step the enrollment does not hold is not identical.
+     *
+     * @param list<QuestCompleteStepDto> $steps
+     */
+    private static function isIdenticalReplay(QuestEnrollment $enrollment, array $steps): bool
+    {
+        $stored = [];
+        foreach ($enrollment->getStepCompletions() as $completion) {
+            $stored[$completion->getId()?->toRfc4122() ?? ''] = $completion;
+        }
+        foreach ($steps as $step) {
+            $completion = $stored[strtolower((string) $step->step_completion_id)] ?? null;
+            if ($completion === null) {
+                return false;
+            }
+            if ($completion->getStatus()->value !== $step->status) {
+                return false;
+            }
+            if ($completion->getStepData() != $step->step_data) {
+                return false;
+            }
+        }
+
+        return $steps !== [];
     }
 }

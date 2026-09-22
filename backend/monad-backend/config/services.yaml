@@ -164,6 +164,11 @@ services:
         arguments:
             $retentionDays: '%env(int:MONAD_BETA_RETENTION_DAYS)%'
 
+    # IP-162 — the one boundary the evidence seal crosses: the bytes of a staged artefact. A port
+    # so the seal's rules run against a real database with a fake object store in the tests; in
+    # the container it reads the sessions bucket.
+    App\Lab\Evidence\ArtefactReader: '@App\Lab\Evidence\S3ArtefactReader'
+
     # IP-157 — the push transport. One port, two adapters, chosen once per container by
     # PushSenderFactory: FCM (kreait) when MONAD_FCM_CREDENTIALS names a readable service-account
     # file, the null adapter otherwise (inbox only, one log line per skipped send). A factory

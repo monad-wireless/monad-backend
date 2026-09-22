@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Quest;
 
 use App\Enum\QuestStepType;
+use App\Lab\Contract\CountingContracts;
 
 /**
  * The warnings an author sees before saving a quest (IP-157). Warnings never block a save;
@@ -112,6 +113,22 @@ final class QuestPreflight
                         );
                         break;
                     }
+                }
+            }
+
+            // IP-162: a room-sweep Counting step is a SOFTWARE contract, and a handset running a
+            // build that predates it would render the step as five partial views and upload
+            // readings under the old meaning. The capability is derived from the frozen config
+            // rather than from the step type, because the step type is shared with the legacy
+            // partial view, which any build can run.
+            if ($type === QuestStepType::OBSERVE && CountingContracts::isSweepConfig((array) $config)) {
+                $capabilities[] = CountingContracts::CAPABILITY_ROOM_SWEEP;
+                if (!($broadcastDeclared || $this->declaresBroadcast($steps))) {
+                    $warnings[] = sprintf(
+                        'Step %d is a room sweep but the start step does not declare features.broadcast: '
+                        . 'the phone will be silent, so no checkpoint can be placed by the fleet.',
+                        $i,
+                    );
                 }
             }
 
@@ -238,6 +255,26 @@ final class QuestPreflight
             'warnings' => $warnings,
             'required_capabilities' => array_values(array_unique($capabilities)),
         ];
+    }
+
+    /**
+     * Whether any start step declares `features.broadcast`. Looked up rather than relying on the
+     * loop's own flag, because an observe step may precede the start step in a hand-authored spec.
+     *
+     * @param list<array{type: string, config: array<string, mixed>}> $steps
+     */
+    private function declaresBroadcast(array $steps): bool
+    {
+        foreach ($steps as $step) {
+            if ($step['type'] === QuestStepType::START->value) {
+                $features = (array) ($step['config']['features'] ?? []);
+                if (($features['broadcast'] ?? false) === true) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static function parse(mixed $value): ?\DateTimeImmutable

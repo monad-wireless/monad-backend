@@ -190,6 +190,32 @@ final class QuestPreflightTest extends TestCase
         self::assertSame(['ble.advertise'], $this->capabilities([self::start(true, false)]));
     }
 
+    public function testARoomSweepStepNeedsTheSweepCapabilityAndABroadcast(): void
+    {
+        $sweep = ['type' => 'observe', 'name' => 'Count', 'config' => [
+            'schema' => 'monad-quest/observe/v2',
+            'mode' => 'room_sweep_cumulative',
+            'prompt' => 'People counted so far',
+        ]];
+        $silent = $this->preflight->run(['steps' => [['type' => 'start', 'name' => 'Go', 'config' => []], $sweep]], [], null, $this->now);
+        self::assertContains('observe.room_sweep.v1', $silent['required_capabilities']);
+        self::assertNotEmpty(array_filter($silent['warnings'], static fn (string $w) => str_contains($w, 'room sweep')));
+
+        $onAir = $this->preflight->run(
+            ['steps' => [['type' => 'start', 'name' => 'Go', 'config' => ['features' => ['broadcast' => true]]], $sweep]],
+            [], null, $this->now,
+        );
+        self::assertContains('observe.room_sweep.v1', $onAir['required_capabilities']);
+        self::assertContains('ble.advertise', $onAir['required_capabilities']);
+        self::assertEmpty(array_filter($onAir['warnings'], static fn (string $w) => str_contains($w, 'room sweep')));
+    }
+
+    public function testALegacyObserveStepNeedsNoSweepCapability(): void
+    {
+        $legacy = ['type' => 'observe', 'name' => 'Count', 'config' => ['prompt' => 'How many?', 'min_readings' => 5]];
+        self::assertNotContains('observe.room_sweep.v1', $this->capabilities([$legacy]));
+    }
+
     public function testCapabilitiesAreDeduplicatedAcrossSteps(): void
     {
         self::assertSame(['ble.advertise', 'camera.qr'], $this->capabilities([

@@ -19,6 +19,9 @@ final class QuestAvailability implements \JsonSerializable
     /** The node is powered and healthy but not capturing — see QuestArmingService. */
     public const REASON_NODE_IDLE = 'node_idle';
 
+    /** IP-162: the handset did not declare a capability the quest requires (start-time gate). */
+    public const REASON_CAPABILITY_MISSING = 'capability_missing';
+
     private function __construct(
         public readonly bool $available,
         public readonly ?string $reason = null,

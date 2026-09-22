@@ -7,6 +7,7 @@ use App\Entity\Quest;
 use App\Entity\QuestStep;
 use App\Entity\User;
 use App\Enum\QuestStepType;
+use App\Lab\Contract\CountingContracts;
 use App\Repository\LabPlacementRepository;
 use App\Service\GroundTruthService;
 use App\Service\LabConfigService;
@@ -333,6 +334,12 @@ class LabTools
                 $broadcastDeclared = ($features['broadcast'] ?? false) === true;
                 // See QuestPreflight for why this is `pose.track` and not `lidar.mesh`.
                 $trackDeclared = ($features['track'] ?? false) === true;
+            }
+
+            // IP-162: a room-sweep Counting step is a software contract an older build would
+            // misread as five partial views. Same derivation as QuestPreflight, by design.
+            if ($type === QuestStepType::OBSERVE && CountingContracts::isSweepConfig((array) $config)) {
+                $requiredCapabilities[] = CountingContracts::CAPABILITY_ROOM_SWEEP;
             }
 
             $step = new QuestStep();
@@ -1035,5 +1042,39 @@ class LabTools
     public function sessionTally(string $lab_session_id): array
     {
         return $this->groundTruth->aggregate($lab_session_id);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    #[McpTool(
+        name: 'lab_session_references',
+        description: 'IP-162: the evidence seal attempts and the sweep reference receipts of one recording session, '
+            . 'each with its disposition (pending | verified | invalid | conflict) and reason codes. '
+            . 'A read of the register, never a count: what the phone recorded lives in the uploaded events.',
+    )]
+    public function sessionReferences(string $recording_session_id): array
+    {
+        $id = \App\Service\LabSessionRegister::sanitize($recording_session_id);
+        $manifests = $this->entityManager->getRepository(\App\Entity\LabEvidenceManifest::class);
+        $receipts = $this->entityManager->getRepository(\App\Entity\LabReferenceReceipt::class);
+        $session = $this->entityManager->getRepository(\App\Entity\LabSession::class)->find($id);
+        $accepted = $manifests->findOneBy(['recordingSessionId' => $id, 'state' => \App\Entity\LabEvidenceManifest::STATE_ACCEPTED]);
+
+        return [
+            'recording_session_id' => $id,
+            'known' => $session !== null,
+            'complete' => $session?->isComplete() ?? false,
+            'sealed' => $accepted !== null,
+            'accepted_manifest_sha256' => $accepted?->getManifestSha256(),
+            'seal_attempts' => array_map(
+                static fn ($m) => $m->toReceipt(),
+                $manifests->findBy(['recordingSessionId' => $id], ['receivedAt' => 'DESC']),
+            ),
+            'references' => array_map(
+                static fn ($r) => $r->toReceipt(),
+                $receipts->findBy(['recordingSessionId' => $id], ['receivedAt' => 'ASC']),
+            ),
+        ];
     }
 }

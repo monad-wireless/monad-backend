@@ -6,6 +6,8 @@ use App\Entity\Device;
 use App\Entity\GroundTruthConflict;
 use App\Entity\GroundTruthScan;
 use App\Entity\Handset;
+use App\Entity\LabEvidenceManifest;
+use App\Entity\LabReferenceReceipt;
 use App\Entity\LabSession;
 use App\Entity\Quest;
 use App\Entity\QuestEnrollment;
@@ -221,12 +223,22 @@ class DashboardController extends AbstractDashboardController
         $scans = $this->entityManager->getRepository(GroundTruthScan::class)
             ->findBy(['recordingSessionId' => $session->getId()], ['receivedAt' => 'ASC'], 200);
 
+        // IP-162: the evidence seal attempts and the sweep receipts, each with its disposition.
+        // Pending is shown as pending; nothing here calls a recording complete because a sidecar
+        // arrived.
+        $seals = $this->entityManager->getRepository(LabEvidenceManifest::class)
+            ->findBy(['recordingSessionId' => $session->getId()], ['receivedAt' => 'DESC']);
+        $references = $this->entityManager->getRepository(LabReferenceReceipt::class)
+            ->findBy(['recordingSessionId' => $session->getId()], ['receivedAt' => 'ASC']);
+
         return $this->render('admin/recording_session.html.twig', [
             'session' => $session,
             'downloads' => $downloads,
             'sidecar_blocks' => $this->sidecarBlocks($session->getSidecar()),
             'figures' => $this->figuresFor($session),
             'scans' => $scans,
+            'seals' => $seals,
+            'references' => $references,
         ]);
     }
 

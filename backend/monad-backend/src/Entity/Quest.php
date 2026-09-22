@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Lab\Contract\CountingContracts;
 use App\Quest\RecurrencePolicy;
 use App\Repository\QuestRepository;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -477,5 +478,29 @@ class Quest
     public function isSupportedBy(array $deviceCapabilities): bool
     {
         return [] === array_diff($this->requiredCapabilities, $deviceCapabilities);
+    }
+
+    /**
+     * Required capabilities the handset did not declare, sorted (IP-162).
+     *
+     * @param string[] $deviceCapabilities
+     * @return list<string>
+     */
+    public function missingCapabilities(array $deviceCapabilities): array
+    {
+        $missing = array_values(array_diff($this->requiredCapabilities, $deviceCapabilities));
+        sort($missing);
+
+        return $missing;
+    }
+
+    /**
+     * Whether this quest carries a room-sweep Counting step (IP-162). Such a quest is withheld
+     * from, and refused to, a handset that declares no capabilities at all: "nothing declared" is
+     * a build that predates the contract and would render the step as five partial views.
+     */
+    public function requiresRoomSweep(): bool
+    {
+        return in_array(CountingContracts::CAPABILITY_ROOM_SWEEP, $this->requiredCapabilities, true);
     }
 }

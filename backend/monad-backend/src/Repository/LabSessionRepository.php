@@ -152,6 +152,47 @@ class LabSessionRepository extends ServiceEntityRepository
     }
 
     /**
+     * Merge the digests an accepted seal observed into the artefact inventory (IP-162).
+     *
+     * `{filename: {sha256, sha256_verified_at}}` joins each existing entry, so the admin's
+     * artefact table and the analysis read the observed hash without opening the manifest row.
+     * Entries for artefacts the register never saw are not created: the seal verified bytes in
+     * the bucket, and the register records arrivals.
+     *
+     * @param array<string, array<string, mixed>> $verification the seal's per-artefact record
+     */
+    public function recordObservedDigests(string $sessionId, array $verification, ?\DateTimeImmutable $now = null): void
+    {
+        $now ??= new \DateTimeImmutable();
+        $patch = [];
+        foreach ($verification as $filename => $entry) {
+            if (($entry['verified'] ?? false) === true && is_string($entry['observed'] ?? null)) {
+                $patch[$filename] = ['sha256' => $entry['observed'], 'sha256_verified_at' => $now->format(\DateTimeInterface::ATOM)];
+            }
+        }
+        if ($patch === []) {
+            return;
+        }
+        $connection = $this->getEntityManager()->getConnection();
+        foreach ($patch as $filename => $fields) {
+            $connection->executeStatement(
+                <<<'SQL'
+                    UPDATE lab_sessions
+                    SET artefacts = jsonb_set(artefacts, ARRAY[:filename], COALESCE(artefacts -> :filename, '{}'::jsonb) || CAST(:fields AS jsonb), true),
+                        updated_at = :now
+                    WHERE id = :id AND jsonb_exists(artefacts, :filename)
+                    SQL,
+                [
+                    'id' => $sessionId,
+                    'filename' => (string) $filename,
+                    'fields' => json_encode($fields, JSON_THROW_ON_ERROR),
+                    'now' => $now->format('Y-m-d H:i:s'),
+                ],
+            );
+        }
+    }
+
+    /**
      * Newest first, with optional filters. The admin's register page.
      *
      * @param array{quest?: string|null, platform?: string|null, complete?: bool|null, participant?: string|null} $filters
