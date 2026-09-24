@@ -27,6 +27,18 @@ framework:
     trusted_proxies: '127.0.0.1,REMOTE_ADDR'
     trusted_headers: ['x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-host', 'x-forwarded-port', 'x-forwarded-prefix']
 
+    # A 404 or 405 is the client's fault, not the server's, and the ErrorListener logs every
+    # 4xx HttpException at `error` unless told otherwise. On 2026-09-23/24 that was 1,659 of the
+    # container's error lines in 24 h, all of them scanners probing `/.env`, `/.git/config`,
+    # `/docker-compose.yml` and `POST /` on the bare IP, burying any real error. `info` is below
+    # the fallback logger's `warning` floor, so these leave the container log; the host nginx
+    # access log still records every request with its status. A 5xx is untouched.
+    exceptions:
+        Symfony\Component\HttpKernel\Exception\NotFoundHttpException:
+            log_level: info
+        Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException:
+            log_level: info
+
     #esi: true
     #fragments: true
 
