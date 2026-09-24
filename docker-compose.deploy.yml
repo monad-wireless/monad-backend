@@ -117,6 +117,11 @@ services:
       - jwt_keys:/app/config/jwt
       - ./backend/monad-backend/config/lab/lab.json:/app/config/lab/lab.json:ro
       - ./config/fcm/:/app/config/fcm/:ro
+    # The image's HEALTHCHECK curls the API on 127.0.0.1:8000. Nothing listens there in this
+    # container, so the inherited probe marks a working consumer `unhealthy`. The consumer is
+    # PID 1: if it dies the container exits and the restart policy acts, so no probe is needed.
+    healthcheck:
+      disable: true
     networks:
       - monad
 
