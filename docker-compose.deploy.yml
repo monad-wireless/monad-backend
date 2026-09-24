@@ -1,0 +1,133 @@
+# Deployment on the project host (Hetzner CCX33), published as api.monad.dubec.dev.
+#
+# Differences from the development compose in this repo:
+#   * joins the external `monad` network, so the API sits alongside the rest of the lab's
+#     services and can be reached by name from them;
+#   * NO database of its own. The host runs exactly one PostgreSQL cluster — the main stack's
+#     PostGIS/pgRouting service — and this deployment is a tenant in it, with its own database
+#     and its own role. A second cluster on the same box was a second thing to back up, patch
+#     and size for no benefit, since the API needs no PostGIS and the GIS store needs no API.
+#     The database and role are created by roles/monad_api (tasks/database.yml), not here;
+#     compose cannot create a database inside a service it does not own.
+#   * binds only to loopback — TLS termination is the host nginx that already serves
+#     monad.dubec.dev, so there is exactly one certificate and one vhost story;
+#   * no source bind-mount and no `composer install` at boot: the image is the artefact;
+#   * object storage is Hetzner, configured by HETZNER_S3_ENDPOINT rather than implied by region.
+#
+# The lab bundle is mounted read-only from the host so an operator can edit the rig description
+# without rebuilding or restarting anything the phones depend on.
+
+services:
+  api:
+    image: ${MONAD_API_IMAGE:-ghcr.io/monad-wireless/monad-backend:main}
+    container_name: monad_api
+    restart: unless-stopped
+    # The anchor is reused verbatim by the `worker` service below (IP-157): same image, same
+    # environment, so the two can never disagree about the database or the FCM path.
+    environment: &api_environment
+      APP_ENV: prod
+      APP_SECRET: ${APP_SECRET}
+      # Points at the main stack's cluster over the shared network, so the host is a variable
+      # rather than a sibling service name. serverVersion follows that cluster (PostgreSQL 18
+      # under pgrouting/pgrouting:18-x), not this repo's dev compose.
+      #
+      # DATABASE_* and not POSTGRES_PORT: the development compose in this repo already uses
+      # POSTGRES_PORT for the port it PUBLISHES on the host (55432), and compose reads .env
+      # from the project directory for whichever file it is given. Reusing the name silently
+      # produced postgis:55432 here.
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DATABASE_HOST:-postgis}:${DATABASE_PORT:-5432}/${POSTGRES_DB}?serverVersion=${DATABASE_SERVER_VERSION:-18}&charset=utf8"
+      JWT_SECRET_KEY: /app/config/jwt/private.pem
+      JWT_PUBLIC_KEY: /app/config/jwt/public.pem
+      JWT_PASSPHRASE: ${JWT_PASSPHRASE}
+      # Router base for absolute URLs generated outside a request (console, API docs).
+      # The image carries a default; without this line the .env value would be inert.
+      DEFAULT_URI: ${DEFAULT_URI:-https://api.monad.dubec.dev}
+      CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN:-^https://(api\.)?monad\.dubec\.dev$$}
+      HETZNER_S3_ENDPOINT: ${HETZNER_S3_ENDPOINT}
+      HETZNER_S3_USE_PATH_STYLE: ${HETZNER_S3_USE_PATH_STYLE:-1}
+      HETZNER_S3_REGION: ${HETZNER_S3_REGION}
+      HETZNER_S3_BUCKET: ${HETZNER_S3_BUCKET}
+      HETZNER_S3_ACCESS_KEY: ${HETZNER_S3_ACCESS_KEY}
+      HETZNER_S3_SECRET_KEY: ${HETZNER_S3_SECRET_KEY}
+      HETZNER_S3_PRESIGNED_URL_EXPIRY: ${HETZNER_S3_PRESIGNED_URL_EXPIRY:-+15 minutes}
+      # Mimir, by container DNS on the shared network below — it publishes no
+      # host port and has no auth of its own, so the bridge is its access
+      # control. Read by GET /api/lab/fleet (so the public site, a host process,
+      # never needs a route into the observability stack) and by the IP-128
+      # quest-arming check. Empty disables both, and the fleet endpoint then
+      # reports `reachable: false` rather than an invented quiet fleet.
+      MONAD_METRICS_URL: ${MONAD_METRICS_URL:-http://mimir:9009/prometheus}
+      # IP-149 — the admin's walk figures (monad-knowledge web `/internal/`, signed). Rendered
+      # into the env file by roles/monad_api; both default to empty, which turns the figures
+      # off and leaves every admin table unaffected.
+      MONAD_WEB_INTERNAL_URL: ${MONAD_WEB_INTERNAL_URL:-}
+      MONAD_WALK_FIGURE_KEY: ${MONAD_WALK_FIGURE_KEY:-}
+      # IP-157 — notifications and onboarding. Defaults match roles/monad_api/templates/env.j2.
+      # MONAD_FCM_CREDENTIALS is the path INSIDE the container of the Firebase service-account
+      # JSON; empty selects the null push adapter (inbox only). The PushSender checks is_file()
+      # on it, because the directory below is mounted whether or not the file exists.
+      MONAD_FCM_CREDENTIALS: ${MONAD_FCM_CREDENTIALS:-}
+      # Days after invitation before app:beta:purge removes a signup that never registered.
+      MONAD_BETA_RETENTION_DAYS: ${MONAD_BETA_RETENTION_DAYS:-90}
+      # /join renders its links against the public site, not this API's hostname.
+      MONAD_PUBLIC_SITE_URL: ${MONAD_PUBLIC_SITE_URL:-https://monad.dubec.dev}
+      # Doctrine transport: the push sends run in the `worker` service below (same image), so a
+      # composer click returns at once and a scheduled send needs no cron on the host. The
+      # transport table is created by messenger:setup-transports or auto_setup on first use.
+      MESSENGER_TRANSPORT_DSN: ${MESSENGER_TRANSPORT_DSN:-doctrine://default}
+    ports:
+      # Loopback only; api.monad.dubec.dev is terminated by the host nginx.
+      # NOT 8080 — Headscale's control server already listens there, and the
+      # monad.dubec.dev vhost proxies its control paths to it.
+      - "127.0.0.1:8084:8000"
+    volumes:
+      - jwt_keys:/app/config/jwt
+      - ./backend/monad-backend/config/lab/lab.json:/app/config/lab/lab.json:ro
+      # IP-157 — the Firebase service account, rendered by roles/monad_api from the vault into
+      # this DIRECTORY. The directory is mounted, not the file: a bind mount of a missing file
+      # makes Docker create a directory at the host path, and the next Ansible run then fails to
+      # write the file over it. Absent file = MONAD_FCM_CREDENTIALS empty = null push adapter.
+      - ./config/fcm/:/app/config/fcm/:ro
+    networks:
+      - monad
+    # No depends_on: the database belongs to another compose project, so compose cannot order
+    # against it. docker/entrypoint.sh already polls the DSN for 60s before migrating, which is
+    # the check that has to exist anyway for a bare `docker run`.
+
+  # IP-157 — the Messenger worker: push sends (the `async` Doctrine transport) and the
+  # scheduler that runs `app:notifications:dispatch-due` every minute (`scheduler_default`).
+  # Same image and environment as the API; no ports, because nothing talks to it.
+  #
+  # The entrypoint is BYPASSED on purpose. docker/entrypoint.sh migrates, installs assets and
+  # warms the cache before exec'ing FrankenPHP, and it takes no arguments; running it here
+  # would race the API's migration at boot and then start a second web server. The worker
+  # therefore starts `bin/console` directly. Consequences: no DB wait (if the worker comes up
+  # before the API has migrated, `messenger:consume` exits and `restart: unless-stopped` brings
+  # it back), and the prod cache is warmed lazily on first boot into the container's own var/.
+  # `--time-limit` recycles the process hourly so a code deploy (new image) and a memory leak
+  # both resolve themselves; the restart policy starts it again.
+  worker:
+    image: ${MONAD_API_IMAGE:-ghcr.io/monad-wireless/monad-backend:main}
+    container_name: monad_worker
+    restart: unless-stopped
+    environment: *api_environment
+    entrypoint: ["php", "bin/console"]
+    command: ["messenger:consume", "scheduler_default", "async", "--time-limit=3600", "--memory-limit=256M"]
+    volumes:
+      - jwt_keys:/app/config/jwt
+      - ./backend/monad-backend/config/lab/lab.json:/app/config/lab/lab.json:ro
+      - ./config/fcm/:/app/config/fcm/:ro
+    # The image's HEALTHCHECK curls the API on 127.0.0.1:8000. Nothing listens there in this
+    # container, so the inherited probe marks a working consumer `unhealthy`. The consumer is
+    # PID 1: if it dies the container exits and the restart policy acts, so no probe is needed.
+    healthcheck:
+      disable: true
+    networks:
+      - monad
+
+volumes:
+  jwt_keys:
+
+networks:
+  monad:
+    external: true

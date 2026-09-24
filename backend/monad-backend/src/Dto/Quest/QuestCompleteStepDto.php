@@ -65,4 +65,12 @@ class QuestCompleteStepDto
                 ->addViolation();
         }
     }
+
+    /**
+     * Monotonic clock at this step, nanoseconds, as a string (IP-128).
+     *
+     * Same spelling as the ground-truth channel's `mono_ns` so one analysis join
+     * covers both. Optional: older clients omit it and stay valid.
+     */
+    public ?string $mono_ns = null;
 }

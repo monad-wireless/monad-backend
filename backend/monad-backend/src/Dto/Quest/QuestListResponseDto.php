@@ -12,6 +12,7 @@ class QuestListResponseDto
     private float $points;
     private ?int $estimatedDuration;
     private int $numberOfSteps;
+    private string $audience;
 
     public function __construct(Quest $quest)
     {
@@ -21,6 +22,7 @@ class QuestListResponseDto
         $this->points = $quest->getPoints();
         $this->estimatedDuration = $quest->getEstimatedDuration();
         $this->numberOfSteps = $quest->getSteps()->count();
+        $this->audience = $quest->getAudience();
     }
 
     public function toArray(): array
@@ -32,6 +34,11 @@ class QuestListResponseDto
             'points' => $this->points,
             'estimatedDuration' => $this->estimatedDuration,
             'numberOfSteps' => $this->numberOfSteps,
+            // The audience a listed quest is FOR (IP-145). A participant never receives an
+            // `operator` row — the controller filters those out for everybody but a superadmin —
+            // so this field exists for the one caller that does: the app, which cannot otherwise
+            // tell an operator take from a student quest and used to mix them in one list.
+            'audience' => $this->audience,
         ];
     }
 
@@ -63,5 +70,10 @@ class QuestListResponseDto
     public function getNumberOfSteps(): int
     {
         return $this->numberOfSteps;
+    }
+
+    public function getAudience(): string
+    {
+        return $this->audience;
     }
 }

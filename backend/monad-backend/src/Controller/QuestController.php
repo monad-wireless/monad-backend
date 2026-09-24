@@ -18,6 +18,15 @@ use App\Entity\QuestStepSkipRecord;
 use App\Entity\User;
 use App\Enum\QuestEnrollmentStatus;
 use App\Enum\QuestStepCompletionStatus;
+use App\Lab\Contract\CountingContracts;
+use App\Lab\Evidence\SweepReceiptService;
+use App\Quest\HandsetDescriptor;
+use App\Quest\HandsetRegistry;
+use App\Quest\QuestArmingService;
+use App\Quest\RealisedRoute;
+use App\Quest\QuestAvailability;
+use App\Repository\DeviceRepository;
+use App\Repository\QuestEnrollmentRepository;
 use App\Repository\QuestRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -64,7 +73,8 @@ class QuestController extends AbstractController
                             new OA\Property(property: 'description', type: 'string', example: 'Explore the main campus buildings and learn about university history', description: 'Quest description'),
                             new OA\Property(property: 'points', type: 'number', format: 'float', example: 100.0, description: 'Points awarded for completing this quest'),
                             new OA\Property(property: 'estimatedDuration', type: 'integer', nullable: true, example: 30, description: 'Estimated duration in minutes'),
-                            new OA\Property(property: 'numberOfSteps', type: 'integer', example: 5, description: 'Number of steps in this quest')
+                            new OA\Property(property: 'numberOfSteps', type: 'integer', example: 5, description: 'Number of steps in this quest'),
+                            new OA\Property(property: 'audience', type: 'string', enum: ['public', 'operator'], example: 'public', description: 'Who this quest is for. Only a superadmin ever receives an `operator` row.')
                         ],
                         type: 'object'
                     )
@@ -101,6 +111,47 @@ class QuestController extends AbstractController
             } else {
                 $quests = $questRepository->findActiveQuests();
             }
+
+            // Audience filtering (IP-145). An operator quest is withheld from the listing
+            // rather than refused at start with a reason: a reason would tell a participant
+            // that a withheld quest exists, and filtering leaks nothing. `startQuest()`
+            // checks the same thing separately, because a filtered list is a convenience and
+            // never the authorisation.
+            //
+            // Placed here, above the capability filter, so it covers BOTH branches above and
+            // any branch added later. It reuses ROLE_SUPERADMIN, which already gates /mcp:
+            // that couples "may walk an operator take" to "may administer the lab", so an
+            // operator take cannot currently be delegated to a student helper.
+            if (!$this->isGranted('ROLE_SUPERADMIN')) {
+                $quests = array_values(array_filter(
+                    $quests,
+                    static fn ($quest) => !$quest->isOperatorOnly()
+                ));
+            }
+
+            // Capability filtering. A device sends what it can do; a quest that needs more is
+            // withheld rather than offered and failed halfway through. Sending nothing keeps the
+            // old behaviour (everything is offered), so existing clients are unaffected.
+            $declared = $request->query->get('capabilities');
+            $deviceCapabilities = [];
+            if (is_string($declared) && '' !== trim($declared)) {
+                $deviceCapabilities = array_values(array_filter(array_map(
+                    'trim',
+                    explode(',', $declared)
+                )));
+                $quests = array_values(array_filter(
+                    $quests,
+                    static fn ($quest) => $quest->isSupportedBy($deviceCapabilities)
+                ));
+            }
+            // IP-162: the room-sweep contract is withheld even from a client that declares
+            // nothing. "Nothing declared" is a build that predates capability reporting, and
+            // such a build would render a sweep step as five partial views. Every other
+            // capability keeps the old rule above, so legacy quests stay offered to legacy clients.
+            $quests = array_values(array_filter(
+                $quests,
+                static fn ($quest) => !$quest->requiresRoomSweep() || in_array(CountingContracts::CAPABILITY_ROOM_SWEEP, $deviceCapabilities, true)
+            ));
 
             // Transform entities to DTOs
             $questDtos = array_map(
@@ -143,7 +194,7 @@ class QuestController extends AbstractController
                 new OA\Property(property: 'description', type: 'string', example: 'Explore the campus and discover hidden locations', description: 'Quest description'),
                 new OA\Property(property: 'points', type: 'number', format: 'float', example: 100.0, description: 'Points awarded for completion'),
                 new OA\Property(property: 'estimatedDuration', type: 'integer', example: 30, nullable: true, description: 'Estimated duration in minutes'),
-                new OA\Property(property: 'featuredImage', type: 'string', example: 'https://bucket.s3.amazonaws.com/public/quest-image.jpg', nullable: true, description: 'Featured image URL'),
+                new OA\Property(property: 'featuredImage', type: 'string', example: 'https://fsn1.your-objectstorage.com/monad-knowledge/public/quest-image.jpg', nullable: true, description: 'Featured image URL'),
                 new OA\Property(property: 'createdAt', type: 'string', format: 'date-time', example: '2025-11-11 15:28:44', description: 'Quest creation timestamp'),
                 new OA\Property(
                     property: 'steps',
@@ -152,7 +203,7 @@ class QuestController extends AbstractController
                         properties: [
                             new OA\Property(property: 'id', type: 'string', format: 'uuid', example: '70000a54-e220-4b17-95c3-ebdfa164caf9', description: 'Step unique identifier'),
                             new OA\Property(property: 'name', type: 'string', example: 'Scan QR Code at Library', description: 'Step name'),
-                            new OA\Property(property: 'type', type: 'string', enum: ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'finish'], example: 'scan_qr', description: 'Step type'),
+                            new OA\Property(property: 'type', type: 'string', enum: ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'sensor_capture', 'ble_advertise', 'probe', 'observe', 'finish'], example: 'scan_qr', description: 'Step type'),
                             new OA\Property(property: 'order', type: 'integer', example: 1, description: 'Step order in quest sequence'),
                             new OA\Property(property: 'config', type: 'object', example: ['qr_code_id' => 'abc123'], description: 'Step-specific configuration')
                         ],
@@ -204,8 +255,13 @@ class QuestController extends AbstractController
             ], Response::HTTP_NOT_FOUND);
         }
 
-        // Convert to DTO and return
-        $dto = QuestDetailResponseDto::fromEntity($quest);
+        // Step config is withheld from anonymous callers. The route is
+        // PUBLIC_ACCESS so a stranger can read what a quest asks of them, but
+        // `config` holds `expected_value` for every scan_qr step — the answer key
+        // to the people channel. The `api` firewall is stateless JWT, so a request
+        // carrying a valid Bearer token populates getUser() while an anonymous one
+        // is still served; that is the whole distinction.
+        $dto = QuestDetailResponseDto::fromEntity($quest, includeStepConfig: $this->getUser() !== null);
 
         return $this->json($dto->toArray());
     }
@@ -214,9 +270,37 @@ class QuestController extends AbstractController
     #[OA\Post(
         path: '/api/quest/{id}/start',
         summary: 'Start a quest',
-        description: 'Creates a quest enrollment for the authenticated user and initializes all quest step completions',
+        description: 'Creates a quest enrollment for the authenticated user and initializes all quest step completions. The optional body carries the handset descriptor (IP-149): what phone is walking this run, frozen on the enrollment as measurement provenance. An empty body is an app build that predates the descriptor and stays valid.',
         security: [['Bearer' => []]],
         tags: ['Quest']
+    )]
+    #[OA\RequestBody(
+        required: false,
+        description: 'Optional. `{"handset": {...}}` — the phone describing itself. Closed top-level keys: handset_id, platform (ios|android), machine, manufacturer, model, soc, os_version, os_build, app_version, build_id, capabilities (string list), sensors (list), radio (object), state (object). Unknown keys are rejected (400 VALIDATION_108); bodies over 64 kB are rejected (400 VALIDATION_109).',
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(
+                    property: 'handset',
+                    type: 'object',
+                    properties: [
+                        new OA\Property(property: 'handset_id', type: 'string', example: '0b6f2a8e-8c1d-4e2a-9f3b-1c2d3e4f5a6b'),
+                        new OA\Property(property: 'platform', type: 'string', enum: ['ios', 'android']),
+                        new OA\Property(property: 'machine', type: 'string', example: 'iPhone15,2'),
+                        new OA\Property(property: 'manufacturer', type: 'string', example: 'Apple'),
+                        new OA\Property(property: 'model', type: 'string', example: 'iPhone'),
+                        new OA\Property(property: 'soc', type: 'string', nullable: true),
+                        new OA\Property(property: 'os_version', type: 'string', example: '18.6'),
+                        new OA\Property(property: 'os_build', type: 'string', example: '22G86'),
+                        new OA\Property(property: 'app_version', type: 'string', example: '1.4.0'),
+                        new OA\Property(property: 'build_id', type: 'string', example: '1.4.0+41.g9a1d2f2b'),
+                        new OA\Property(property: 'capabilities', type: 'array', items: new OA\Items(type: 'string')),
+                        new OA\Property(property: 'sensors', type: 'array', items: new OA\Items(type: 'object')),
+                        new OA\Property(property: 'radio', type: 'object'),
+                        new OA\Property(property: 'state', type: 'object'),
+                    ]
+                ),
+            ]
+        )
     )]
     #[OA\Parameter(
         name: 'id',
@@ -245,7 +329,7 @@ class QuestController extends AbstractController
                                     new OA\Property(property: 'step_id', type: 'string', format: 'uuid'),
                                     new OA\Property(property: 'step_completion_id', type: 'string', format: 'uuid'),
                                     new OA\Property(property: 'name', type: 'string'),
-                                    new OA\Property(property: 'type', type: 'string', enum: ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'finish']),
+                                    new OA\Property(property: 'type', type: 'string', enum: ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'sensor_capture', 'ble_advertise', 'probe', 'observe', 'finish']),
                                     new OA\Property(property: 'order', type: 'integer'),
                                     new OA\Property(property: 'config', type: 'object')
                                 ],
@@ -289,7 +373,12 @@ class QuestController extends AbstractController
     )]
     public function startQuest(
         string $id,
+        Request $request,
         QuestRepository $questRepository,
+        DeviceRepository $deviceRepository,
+        QuestEnrollmentRepository $enrollmentRepository,
+        QuestArmingService $arming,
+        HandsetRegistry $handsets,
         EntityManagerInterface $entityManager
     ): JsonResponse {
         // Check authentication
@@ -299,6 +388,12 @@ class QuestController extends AbstractController
                 'error' => 'Authentication required'
             ], Response::HTTP_UNAUTHORIZED);
         }
+
+        // IP-149 — the phone describing itself. Parsed BEFORE any database work so a
+        // malformed body costs a 400 and not a half-written enrollment. Null is an app
+        // build that sent no body, and that stays valid; the descriptor's own validator
+        // raises the 400 (VALIDATION_108 / _109) for anything present and wrong.
+        $handsetDescriptor = HandsetDescriptor::fromRequestBody($request->getContent());
 
         // Validate UUID format
         try {
@@ -315,6 +410,40 @@ class QuestController extends AbstractController
             return $this->json([
                 'error' => 'Quest not found'
             ], Response::HTTP_NOT_FOUND);
+        }
+
+        // Audience gate (IP-145). The listing already hides this quest, but a filtered
+        // list is a convenience and never the authorisation: the id is guessable and the
+        // endpoint is reachable directly.
+        //
+        // 404, not 403. The whole reason the listing filters rather than returning a
+        // QuestAvailability reason is that a reason discloses a withheld quest exists;
+        // a 403 here would give that away again through the back door. To someone
+        // without the role, an operator quest simply is not there.
+        if ($quest->isOperatorOnly() && !$this->isGranted('ROLE_SUPERADMIN')) {
+            return $this->json([
+                'error' => 'Quest not found'
+            ], Response::HTTP_NOT_FOUND);
+        }
+
+        // Capability gate at START (IP-162). The listing filter is a convenience; this is the
+        // authorisation. What the handset can do is read from the IP-149 descriptor's
+        // `capabilities` list and from a `capabilities` query parameter, unioned. A quest that
+        // needs the room-sweep contract is refused to a client that declares nothing at all,
+        // because "nothing" is a build that predates the contract and would misread the step;
+        // every other capability is enforced only against an explicit declaration, which keeps
+        // legacy quests startable by legacy clients exactly as before.
+        $declaredCapabilities = self::declaredCapabilities($request, $handsetDescriptor);
+        $missing = $quest->missingCapabilities($declaredCapabilities);
+        $refuse = $quest->requiresRoomSweep()
+            ? $missing !== []
+            : ($declaredCapabilities !== [] && $missing !== []);
+        if ($refuse) {
+            return $this->json([
+                'error' => 'This handset does not report a capability the quest requires',
+                'reason' => QuestAvailability::REASON_CAPABILITY_MISSING,
+                'missing_capabilities' => $missing,
+            ], Response::HTTP_CONFLICT);
         }
 
         // Validate quest is active
@@ -334,11 +463,80 @@ class QuestController extends AbstractController
             ], Response::HTTP_BAD_REQUEST);
         }
 
+        // IP-128 — which node is this run happening at? Optional: a quest started
+        // from the catalogue rather than from a scanned label has no device, and
+        // that stays valid.
+        $device = null;
+        $deviceSlug = $request->query->get('device');
+        if (is_string($deviceSlug) && '' !== $deviceSlug) {
+            $device = $deviceRepository->findBySlug($deviceSlug);
+            if (null === $device) {
+                return $this->json([
+                    'error' => 'Unknown device'
+                ], Response::HTTP_NOT_FOUND);
+            }
+        }
+
+        // IP-128 — one gate, shared with the public device page, so a quest can
+        // never look available there and 409 here.
+        $availability = $arming->assess(
+            quest: $quest,
+            user: $user,
+            device: $device,
+            requiresCapture: false,
+        );
+
+        if (!$availability->available) {
+            // A stale IN_PROGRESS run is not a refusal, it is litter: nothing
+            // sets ABANDONED automatically, so a force-quit would otherwise
+            // exclude this participant from this node permanently. Reap and let
+            // the new run proceed.
+            $reaped = false;
+            if (QuestAvailability::REASON_IN_PROGRESS === $availability->reason) {
+                $open = $enrollmentRepository->findOpenFor($user, $quest, $device);
+                if (null !== $open && $arming->isStale($open, $quest)) {
+                    $open->setStatus(QuestEnrollmentStatus::ABANDONED);
+                    $entityManager->flush();
+                    $reaped = true;
+                }
+            }
+
+            if (!$reaped) {
+                return $this->json([
+                    'error' => 'Quest is not available right now',
+                    'reason' => $availability->reason,
+                    'retry_at' => $availability->retryAt?->format(\DateTimeInterface::ATOM),
+                ], Response::HTTP_CONFLICT);
+            }
+        }
+
         // Create quest enrollment
         $enrollment = new QuestEnrollment();
         $enrollment->setUser($user);
         $enrollment->setQuest($quest);
+        $enrollment->setDevice($device);
         $enrollment->setCompletedAt(null);
+
+        // IP-149 — freeze the transmitter beside the receiver. The handset row is
+        // found-or-created in the same unit of work as the enrollment, so a failure
+        // after this point leaves neither. The snapshot is the body as received.
+        if ($handsetDescriptor !== null) {
+            $enrollment->attachHandset($handsets->observe($handsetDescriptor), $handsetDescriptor->toArray());
+        }
+
+        // Realise the route, once, here (IP-145). A quest with a pool gives a different
+        // order to each enrollment; one without gives null and the declared step order is
+        // served, which is every quest before IP-145.
+        //
+        // Server-side because two devices must not disagree about what was asked, and
+        // because the analysis has to be able to recover what THIS walker was told to do.
+        // The chosen sequence is stored rather than the seed that produced it: a seed only
+        // reproduces against a frozen generator, and `loop_order` is not frozen.
+        //
+        // Nothing here computes geometry. The pool was generated by
+        // `monad-knowledge lab quest-build`, which owns the rule that keeps a leg out of a
+        // wall, and this picks an element of a list.
+        $enrollment->setRealisedSteps($quest->drawRoute());
 
         // Create data path: s3://monad-bucket/experiments/YYYY/MM/DD/:user_id/:quest_id/:enrollment_id/
         $date = new \DateTime();
@@ -353,20 +551,37 @@ class QuestController extends AbstractController
         );
         $enrollment->setDataPath($dataPath);
 
-        // Create quest step completions for all steps
-        $steps = $quest->getSteps();
+        // The steps THIS enrollment walks (IP-145). For a quest without a pool that is every
+        // declared step in its declared order, which is every quest before IP-145.
+        //
+        // A completion row is created only for the steps actually served. Creating them for
+        // the declared set would mean a pooled run could never reach 100%, and the fifteen
+        // stops it was never asked to walk would sit unfinished forever.
+        $steps = RealisedRoute::apply(
+            $quest->getSteps()->toArray(),
+            $enrollment->getRealisedSteps(),
+        );
         $stepDtos = [];
 
-        foreach ($steps as $step) {
+        foreach ($steps as $index => $step) {
             $stepCompletion = new QuestStepCompletion();
             $stepCompletion->setEnrollment($enrollment);
             $stepCompletion->setStep($step);
+            // Freeze what this walker was actually asked to do, at the position they were
+            // asked to do it. The run carries its own configuration from here on, so the
+            // quest can be rewritten afterwards and this run still reports itself
+            // truthfully. Before this the step ROW was the record, which is why rewriting
+            // a quest with runs was refused outright and the catalogue grew retired
+            // generations instead of being edited.
+            $stepCompletion->snapshotStep($step, $index);
 
             $enrollment->addStepCompletion($stepCompletion);
             $entityManager->persist($stepCompletion);
 
-            // Create DTO for response
-            $stepDtos[] = QuestStartStepDto::fromEntities($step, $stepCompletion);
+            // Renumbered to the realised sequence. The step ROWS are shared by every
+            // enrollment and must keep their declared order; the sequence this walker was
+            // asked for is a property of the response.
+            $stepDtos[] = QuestStartStepDto::fromEntities($step, $stepCompletion, $index);
         }
 
         // Persist enrollment
@@ -505,7 +720,8 @@ class QuestController extends AbstractController
         string $quest_id,
         Request $request,
         EntityManagerInterface $entityManager,
-        ValidatorInterface $validator
+        ValidatorInterface $validator,
+        SweepReceiptService $sweepReceipts
     ): JsonResponse {
         $user = $this->getUser();
         if (!$user instanceof User) {
@@ -536,6 +752,9 @@ class QuestController extends AbstractController
                 $stepDto->status = $stepData['status'] ?? null;
                 $stepDto->started_at = $stepData['started_at'] ?? null;
                 $stepDto->completed_at = $stepData['completed_at'] ?? null;
+                // IP-128 — monotonic reading, so quest labels can be time-joined to
+                // CSI despite RTC-less nodes and adjustable handset clocks.
+                $stepDto->mono_ns = isset($stepData['mono_ns']) ? (string) $stepData['mono_ns'] : null;
                 $stepDto->step_data = $stepData['step_data'] ?? [];
 
                 // Map skip_record if present
@@ -596,8 +815,26 @@ class QuestController extends AbstractController
                 ], Response::HTTP_FORBIDDEN);
             }
 
-            // 3. Verify enrollment status is in_progress
+            // 3. Verify enrollment status is in_progress.
+            //
+            // IP-162: an IDENTICAL retry of an already accepted completion returns the same
+            // receipt rather than a 409 — the app retries a completion whose response it never
+            // saw, and a retry must not read as a conflict. Identical means every step's status
+            // and step_data equal what was stored; anything else is a different claim about the
+            // same run and stays a conflict. Points were frozen by the first acceptance and
+            // `awardPoints()` is idempotent, so nothing is paid twice.
             if ($enrollment->getStatus() !== QuestEnrollmentStatus::IN_PROGRESS) {
+                if ($enrollment->getStatus() === QuestEnrollmentStatus::COMPLETED
+                    && self::isIdenticalReplay($enrollment, $requestDto->steps)) {
+                    $entityManager->rollback();
+
+                    return $this->json((new QuestCompleteResponseDto(
+                        success: true,
+                        enrollment_id: $enrollment->getId()->toString(),
+                        points_earned: $enrollment->getPointsAwarded() ?? $enrollment->getQuest()->getPoints(),
+                        completed_at: $enrollment->getCompletedAt()?->format('Y-m-d\TH:i:s\Z') ?? '',
+                    ))->toArray(), Response::HTTP_OK);
+                }
                 $entityManager->rollback();
                 return $this->json([
                     'error' => 'Enrollment is already ' . $enrollment->getStatus()->value
@@ -668,7 +905,32 @@ class QuestController extends AbstractController
                 $stepCompletion->setStatus($status);
                 $stepCompletion->setStartedAt(new \DateTime($stepDto->started_at));
                 $stepCompletion->setCompletedAt(new \DateTime($stepDto->completed_at));
+                // IP-128 — the monotonic pair for the wall clock above. Without it a
+                // quest label cannot be placed against a CSI capture with confidence:
+                // fleet nodes have no RTC and get stepped by chrony, and a handset's
+                // wall clock is user-adjustable.
+                $stepCompletion->setMonoNs($stepDto->mono_ns);
                 $stepCompletion->setStepData($stepDto->step_data);
+
+                // IP-162: a room-sweep step's step_data is a typed summary that points at the
+                // uploaded evidence. It is validated against THIS completion's frozen snapshot
+                // (same protocol digest, same step, an offered room) and lands as a reference
+                // receipt, pending until the recording's seal reconciles it. A summary that
+                // contradicts the snapshot fails the completion: a count filed under the wrong
+                // protocol is worse than no completion. A completed sweep step with no summary
+                // at all is refused for the same reason.
+                if ($status === QuestStepCompletionStatus::COMPLETED && SweepReceiptService::isSweepStep($stepCompletion)) {
+                    $problems = $sweepReceipts->recordCompletion($stepCompletion, $stepDto->step_data);
+                    if ($problems !== []) {
+                        $entityManager->rollback();
+
+                        return $this->json([
+                            'error' => 'Sweep summary rejected',
+                            'step_completion_id' => $stepDto->step_completion_id,
+                            'details' => $problems,
+                        ], Response::HTTP_UNPROCESSABLE_ENTITY);
+                    }
+                }
 
                 // Create skip record if needed
                 if (in_array($status, [QuestStepCompletionStatus::FAILED, QuestStepCompletionStatus::SKIPPED])) {
@@ -690,10 +952,37 @@ class QuestController extends AbstractController
                 $enrollment->setStatus(QuestEnrollmentStatus::FAILED);
             } else {
                 $enrollment->setStatus(QuestEnrollmentStatus::COMPLETED);
+
+                // 12b. Freeze what this completion was worth (IP-145).
+                //
+                // Frozen here rather than derived later from `quests.points`, because that
+                // column is mutable and a derived total silently rewrites history the first
+                // time a quest is re-valued. Before IP-145 nothing accrued at all: the
+                // response returned the quest's current value and stored none of it.
+                //
+                // Stamped with the SERVER clock, not `$requestDto->completed_at`, on the
+                // same rule step 13 states: a participant-reported time may describe their
+                // own step timings and may not be the record of when something was granted.
+                //
+                // `awardPoints()` is idempotent, so a replayed completion cannot double-pay
+                // and cannot re-value an already finished walk.
+                $enrollment->awardPoints($enrollment->getQuest()->getPoints(), new \DateTimeImmutable());
             }
 
             // 13. Set completed_at timestamp
+            //
+            // This value comes from the REQUEST BODY and is therefore participant
+            // -reported, not observed. It is kept because the participant's own
+            // clock is what their step timings are expressed in — but nothing
+            // that gates access may be measured against it (IP-128).
             $enrollment->setCompletedAt(new \DateTime($requestDto->completed_at));
+
+            // 13b. Stamp the SERVER's view of when this arrived.
+            //
+            // The recurrence cooldown reads only this column. Gating on
+            // `completed_at` above would let a client post a backdated finish and
+            // clear its own cooldown instantly, which is not a cooldown at all.
+            $enrollment->markCompletionReceived();
 
             // 14. Update data_path if data_file provided
             if ($requestDto->data_file) {
@@ -712,10 +1001,16 @@ class QuestController extends AbstractController
             $entityManager->commit();
 
             // 16. Prepare response
+            //
+            // `getPointsAwarded()` and not `getQuest()->getPoints()` (IP-145). The award was
+            // frozen at step 15 from the quest's value as it then stood; reading the quest
+            // again here would mean a re-valuation between the freeze and the response
+            // changed what this completion was worth. The fallback keeps a pre-IP-145
+            // enrollment answering rather than returning null.
             $response = new QuestCompleteResponseDto(
                 success: true,
                 enrollment_id: $enrollment->getId()->toString(),
-                points_earned: $enrollment->getQuest()->getPoints(),
+                points_earned: $enrollment->getPointsAwarded() ?? $enrollment->getQuest()->getPoints(),
                 completed_at: $enrollment->getCompletedAt()->format('Y-m-d\TH:i:s\Z')
             );
 
@@ -728,5 +1023,58 @@ class QuestController extends AbstractController
                 'message' => $e->getMessage()
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * What the handset says it can do, at start (IP-162): the IP-149 descriptor's `capabilities`
+     * list unioned with a `capabilities` query parameter (comma-separated, as the listing takes
+     * it). Empty when neither was sent.
+     *
+     * @return list<string>
+     */
+    private static function declaredCapabilities(Request $request, ?HandsetDescriptor $handset): array
+    {
+        $tokens = [];
+        $query = $request->query->get('capabilities');
+        if (is_string($query) && trim($query) !== '') {
+            $tokens = array_map('trim', explode(',', $query));
+        }
+        if ($handset !== null) {
+            $declared = $handset->toArray()['capabilities'] ?? [];
+            if (is_array($declared)) {
+                $tokens = array_merge($tokens, array_filter($declared, 'is_string'));
+            }
+        }
+
+        return array_values(array_unique(array_filter($tokens, static fn (string $t) => $t !== '')));
+    }
+
+    /**
+     * Whether a completion request repeats what an already completed enrollment stored: every
+     * named step with the same status and the same step_data. Steps the request does not name
+     * are not compared; a request naming a step the enrollment does not hold is not identical.
+     *
+     * @param list<QuestCompleteStepDto> $steps
+     */
+    private static function isIdenticalReplay(QuestEnrollment $enrollment, array $steps): bool
+    {
+        $stored = [];
+        foreach ($enrollment->getStepCompletions() as $completion) {
+            $stored[$completion->getId()?->toRfc4122() ?? ''] = $completion;
+        }
+        foreach ($steps as $step) {
+            $completion = $stored[strtolower((string) $step->step_completion_id)] ?? null;
+            if ($completion === null) {
+                return false;
+            }
+            if ($completion->getStatus()->value !== $step->status) {
+                return false;
+            }
+            if ($completion->getStepData() != $step->step_data) {
+                return false;
+            }
+        }
+
+        return $steps !== [];
     }
 }

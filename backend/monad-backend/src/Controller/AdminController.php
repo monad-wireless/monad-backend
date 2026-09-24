@@ -79,7 +79,7 @@ class AdminController extends AbstractController
                     property: 'featured_image',
                     type: 'string',
                     nullable: true,
-                    example: 'https://bucket.s3.amazonaws.com/public/quest-image.jpg',
+                    example: 'https://fsn1.your-objectstorage.com/monad-knowledge/public/quest-image.jpg',
                     description: 'Featured image URL (max 512 characters)'
                 ),
                 new OA\Property(
@@ -92,7 +92,7 @@ class AdminController extends AbstractController
                             new OA\Property(
                                 property: 'type',
                                 type: 'string',
-                                enum: ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'finish']
+                                enum: ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'sensor_capture', 'ble_advertise', 'finish']
                             ),
                             new OA\Property(property: 'order', type: 'integer', example: 0),
                             new OA\Property(
@@ -252,8 +252,11 @@ class AdminController extends AbstractController
             $entityManager->flush();
             $entityManager->commit();
 
-            // Build response
-            $responseDto = QuestDetailResponseDto::fromEntity($quest);
+            // Build response. Step config is echoed back here on purpose: this is
+            // ^/api/admin (ROLE_SUPERADMIN, tailnet-only) and the author needs to
+            // see the config they just posted. The default is off because the
+            // public detail route shares this DTO.
+            $responseDto = QuestDetailResponseDto::fromEntity($quest, includeStepConfig: true);
 
             return $this->json([
                 'message' => 'Quest created successfully',

@@ -203,7 +203,7 @@ readonly class QuestDecorator implements OpenApiFactoryInterface
                                                     ],
                                                     'type' => [
                                                         'type' => 'string',
-                                                        'enum' => ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'finish'],
+                                                        'enum' => ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'sensor_capture', 'ble_advertise', 'finish'],
                                                         'example' => 'scan_qr',
                                                         'description' => 'Step type',
                                                     ],
@@ -333,7 +333,7 @@ readonly class QuestDecorator implements OpenApiFactoryInterface
                                                             ],
                                                             'type' => [
                                                                 'type' => 'string',
-                                                                'enum' => ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'finish'],
+                                                                'enum' => ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'sensor_capture', 'ble_advertise', 'finish'],
                                                                 'description' => 'Step type',
                                                             ],
                                                             'order' => [
@@ -742,7 +742,7 @@ readonly class QuestDecorator implements OpenApiFactoryInterface
                                                 ],
                                                 'type' => [
                                                     'type' => 'string',
-                                                    'enum' => ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'finish'],
+                                                    'enum' => ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'sensor_capture', 'ble_advertise', 'finish'],
                                                     'example' => 'find_ble_device',
                                                     'description' => 'Step type',
                                                 ],

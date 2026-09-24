@@ -1,0 +1,161 @@
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  static:
+    name: Lint and validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          # The version the image builds against. Auto-instrumentation packages declare
+          # ext-opentelemetry, so without it `composer validate --strict` cannot resolve the tree.
+          extensions: pdo_pgsql, zip, intl, opentelemetry
+          coverage: none
+
+      - name: Validate composer manifest
+        working-directory: backend/monad-backend
+        run: composer validate --strict
+
+      - name: Install dependencies
+        working-directory: backend/monad-backend
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Lint PHP sources
+        working-directory: backend/monad-backend
+        run: find src config -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Validate container and routing
+        working-directory: backend/monad-backend
+        env:
+          APP_ENV: prod
+          APP_SECRET: ci
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci?serverVersion=16&charset=utf8
+          JWT_SECRET_KEY: config/jwt/private.pem
+          JWT_PUBLIC_KEY: config/jwt/public.pem
+          JWT_PASSPHRASE: ci
+          DEFAULT_URI: https://api.monad.dubec.dev
+          CORS_ALLOW_ORIGIN: '^https://api\.monad\.dubec\.dev$'
+          HETZNER_S3_ENDPOINT: https://example.invalid
+          HETZNER_S3_REGION: fsn1
+          HETZNER_S3_BUCKET: ci
+          HETZNER_S3_ACCESS_KEY: ci
+          HETZNER_S3_SECRET_KEY: ci
+          HETZNER_S3_PRESIGNED_URL_EXPIRY: '+15 minutes'
+        run: |
+          php bin/console lint:container
+          php bin/console lint:yaml config
+          php bin/console debug:router --no-interaction | grep -q api_lab_config
+          php bin/console debug:router --no-interaction | grep -q api_storage_session_upload
+          php bin/console debug:router --no-interaction | grep -q api_lab_ground_truth_ingest
+          php bin/console debug:router --no-interaction | grep -q api_lab_ground_truth_aggregate
+
+  tests:
+    name: Unit and integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: monad
+          POSTGRES_USER: monad
+          POSTGRES_PASSWORD: monad
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U monad" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      # The ground-truth idempotency guarantee IS a UNIQUE index, so the suite runs against a real
+      # PostgreSQL rather than a double. Doctrine's `when@test` config appends `_test`, so the
+      # database the tests actually use is `monad_test`.
+      DATABASE_URL: postgresql://monad:monad@127.0.0.1:5432/monad?serverVersion=16&charset=utf8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_pgsql, zip, intl, opentelemetry
+          coverage: none
+
+      - name: Install dependencies
+        working-directory: backend/monad-backend
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare test database
+        working-directory: backend/monad-backend
+        env:
+          APP_ENV: test
+        run: |
+          php bin/console doctrine:database:create --if-not-exists --no-interaction
+          php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
+
+      # A migration that drifts from its mapping is the failure mode that only ever shows up in
+      # production, so it is asserted here rather than trusted.
+      - name: Assert ground-truth mapping matches the migration
+        working-directory: backend/monad-backend
+        env:
+          APP_ENV: test
+        run: |
+          php bin/console doctrine:schema:update --dump-sql \
+            | tee /tmp/drift.sql
+          if grep -qi 'ground_truth' /tmp/drift.sql; then
+            echo "::error::ground_truth schema drifted from its Doctrine mapping"; exit 1
+          fi
+
+      - name: PHPUnit
+        working-directory: backend/monad-backend
+        run: php vendor/bin/phpunit
+
+  smoke:
+    name: Container smoke test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: monad
+          POSTGRES_USER: monad
+          POSTGRES_PASSWORD: monad
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U monad" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t monad-api:ci ./backend/monad-backend
+
+      # The point of this job: prove the image boots, runs its migrations, and answers /api/health
+      # unauthenticated. Every previous production incident on this service was a boot-time
+      # configuration problem, not a code problem — a green unit test would not have caught one.
+      - name: Boot and probe
+        run: |
+          docker run -d --name api --network host \
+            -e APP_SECRET=ci -e JWT_PASSPHRASE=ci \
+            -e "DATABASE_URL=postgresql://monad:monad@127.0.0.1:5432/monad?serverVersion=16&charset=utf8" \
+            -e HETZNER_S3_REGION=fsn1 -e HETZNER_S3_BUCKET=ci \
+            -e HETZNER_S3_ACCESS_KEY=ci -e HETZNER_S3_SECRET_KEY=ci \
+            -e "HETZNER_S3_PRESIGNED_URL_EXPIRY=+15 minutes" \
+            -e OTEL_TRACES_EXPORTER=none -e OTEL_METRICS_EXPORTER=none \
+            monad-api:ci
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8000/api/health | grep -q '"status":"healthy"'; then
+              echo "healthy after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API did not become healthy"; docker logs api; exit 1
+
+      - name: Container logs
+        if: always()
+        run: docker logs api || true

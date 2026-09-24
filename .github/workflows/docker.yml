@@ -1,0 +1,99 @@
+name: Docker build
+
+# Replaces the AWS ECR/EC2 pipeline. The API now runs on the project host alongside the rest of
+# the lab (Neo4j, Milvus, PostGIS, the LGTM stack) on the shared `monad` docker network, and the
+# image lives in GHCR next to ghcr.io/sibyx/monad-knowledge — one registry, one set of credentials.
+
+on:
+  push:
+    # Feature branches publish images too. Deployment is an Ansible play against a
+    # long-lived host, so being able to run a branch build there — without merging
+    # it to main first — is the difference between testing a change and guessing.
+    branches: [main, 'feature/**']
+    tags: ['*.*.*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A second push to the same branch supersedes the first; nothing downstream wants
+  # the older image.
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
+      - uses: actions/checkout@v4
+
+      - name: Log into ${{ env.REGISTRY }}
+        # Pull requests from forks get no package write token; build without pushing so the
+        # Dockerfile is still verified on every PR.
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # `feature/refactor` becomes `feature-refactor` — slashes are not legal
+            # in a tag, and the action substitutes them.
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=sha,format=long
+            # `latest` ONLY on the default branch. Without this pin a feature build
+            # would silently become the tag an unpinned deployment pulls.
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend/monad-backend
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The deploy command is the thing an operator actually wants out of a branch
+      # build, and reconstructing the tag by hand is where the slash substitution
+      # trips people up. Print it.
+      - name: Deployment hint
+        if: github.event_name != 'pull_request'
+        run: |
+          {
+            echo "### Image published"
+            echo
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+            echo
+            echo "Deploy this build:"
+            echo
+            echo '```bash'
+            echo "cd infra/ansible"
+            echo "ansible-playbook playbooks/monad-api.yml \\"
+            echo "  -e monad_api_image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$(echo '${{ github.ref_name }}' | tr '/' '-')"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

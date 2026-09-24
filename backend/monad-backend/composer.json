@@ -7,28 +7,42 @@
         "php": ">=8.2",
         "ext-ctype": "*",
         "ext-iconv": "*",
-        "api-platform/doctrine-orm": "^4.2",
-        "api-platform/symfony": "^4.2",
-        "aws/aws-sdk-php": "^3.363",
+        "api-platform/openapi": "^4.2",
+        "async-aws/s3": "^3.4",
         "doctrine/dbal": "^3",
         "doctrine/doctrine-bundle": "^2.18",
         "doctrine/doctrine-migrations-bundle": "^3.5",
         "doctrine/orm": "^3.5",
+        "easycorp/easyadmin-bundle": "^4.29",
+        "egulias/email-validator": "^4.0",
+        "endroid/qr-code": "^6.0",
+        "kreait/firebase-php": "^8.5",
         "lexik/jwt-authentication-bundle": "^3.1",
         "nelmio/api-doc-bundle": "^5.7",
         "nelmio/cors-bundle": "^2.6",
+        "nyholm/psr7": "^1.8",
+        "open-telemetry/exporter-otlp": "^1.4",
+        "open-telemetry/opentelemetry-auto-symfony": "^1.4",
+        "open-telemetry/sdk": "^1.15",
+        "php-http/discovery": "^1.20",
         "phpdocumentor/reflection-docblock": "^5.6",
         "phpstan/phpdoc-parser": "^2.3",
         "symfony/asset": "7.3.*",
         "symfony/console": "7.3.*",
+        "symfony/doctrine-messenger": "7.3.*",
         "symfony/dotenv": "7.3.*",
         "symfony/expression-language": "7.3.*",
         "symfony/flex": "^2",
         "symfony/framework-bundle": "7.3.*",
+        "symfony/http-client": "^7.4",
+        "symfony/mcp-bundle": "^0.12.0",
+        "symfony/messenger": "7.3.*",
         "symfony/mime": "7.3.*",
         "symfony/property-access": "7.3.*",
         "symfony/property-info": "7.3.*",
+        "symfony/rate-limiter": "7.3.*",
         "symfony/runtime": "7.3.*",
+        "symfony/scheduler": "7.3.*",
         "symfony/security-bundle": "7.3.*",
         "symfony/serializer": "7.3.*",
         "symfony/twig-bundle": "7.3.*",
@@ -42,7 +56,11 @@
             "symfony/runtime": true
         },
         "bump-after-update": true,
-        "sort-packages": true
+        "sort-packages": true,
+        "platform": {
+            "php": "8.3.0",
+            "ext-opentelemetry": "1.1.0"
+        }
     },
     "autoload": {
         "psr-4": {
@@ -88,6 +106,8 @@
     },
     "require-dev": {
         "doctrine/doctrine-fixtures-bundle": "^4.3",
-        "symfony/maker-bundle": "^1.64"
+        "phpunit/phpunit": "^11.5",
+        "symfony/maker-bundle": "^1.64",
+        "symfony/phpunit-bridge": "^7.3"
     }
 }

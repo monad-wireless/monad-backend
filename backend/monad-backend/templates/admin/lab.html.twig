@@ -1,0 +1,70 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% import 'admin/_ui.html.twig' as ui %}
+
+{#
+  LAB (IP-157 Phase 8): what the instrument IS.
+
+  The tabs link OUT to the pages that already do these jobs; Phase 11 folds them into this
+  page. The Fleet tab is rendered here because "is anything hearing" is the question this
+  section is opened with, and a tab bar whose first tab is also a link would make the section
+  a menu with extra steps.
+
+  The bar itself lives in `admin/_lab_tabs.html.twig` because all five pages render it.
+#}
+
+{% block content_title %}Lab{% endblock %}
+
+{% block main %}
+    {{ include('admin/_lab_tabs.html.twig', {active: 'Fleet'}) }}
+
+    {% if not fleet.reachable %}
+        <div class="ui-flash ui-flash-warning">
+            The metrics store could not be read (or <code>MONAD_METRICS_URL</code> is unset). That is a
+            different fact from a resting fleet, and no number is shown in its place.
+        </div>
+    {% else %}
+        {% set scalars = [{label: 'Read', value: ui.clock(fleet.read_at)}] %}
+        {% for key, value in fleet.scalars %}
+            {% set scalars = scalars|merge([{label: key|replace({'_': ' '}), value: value|round(2)}]) %}
+        {% endfor %}
+        {{ ui.strip(scalars) }}
+
+        {% set rows = [] %}
+        {% for host, node in fleet.nodes %}
+            {% set v = node.values %}
+            {% set rows = rows|merge([[
+                '<code>' ~ host|e ~ '</code>',
+                node.capture_active is null
+                    ? ui.state('no csid', 'muted')
+                    : (node.capture_active ? ui.state('up', 'ok') : ui.state('resting', 'warn')),
+                node.capture_rate_hz is null ? '—' : node.capture_rate_hz|round(1),
+                v.monitor_frames_per_s is defined ? v.monitor_frames_per_s|round : '—',
+                v.soc_temp_c is defined
+                    ? (v.soc_temp_c >= 80 ? '<span class="state state-bad">' ~ v.soc_temp_c|round(1) ~ '</span>' : v.soc_temp_c|round(1))
+                    : '—',
+                v.thermal_headroom_c is defined ? v.thermal_headroom_c|round(1) : '—',
+                v.nic_temp_c is defined ? v.nic_temp_c|round(1) : '—',
+                v.cpu_busy_pct is defined ? v.cpu_busy_pct|round : '—',
+                v.memory_used_pct is defined ? v.memory_used_pct|round : '—',
+                v.uptime_seconds is defined ? v.uptime_seconds|duration : '—',
+            ]]) %}
+        {% endfor %}
+        {{ ui.table(rows, [
+            {label: 'Node'},
+            {label: 'Capture process'},
+            {label: 'CSI Hz', align: 'right'},
+            {label: 'Monitor frames/s', align: 'right'},
+            {label: 'SoC °C', align: 'right'},
+            {label: 'Headroom °C', align: 'right'},
+            {label: 'NIC °C', align: 'right'},
+            {label: 'CPU %', align: 'right'},
+            {label: 'Memory %', align: 'right'},
+            {label: 'Uptime', align: 'right'}
+        ], {empty: 'No node reported.'}) }}
+
+        <p class="ui-note">"Capture process" is csid's heartbeat; "CSI Hz" is records landing. They are two
+        facts and stay two columns: on 2026-08-15 five nodes reported the first and one the second. A dash
+        is a series the node does not export, not a zero. Same allow-list as the public <code>/fleet/</code>
+        page (<code>FleetMetricsReader</code>).</p>
+    {% endif %}
+{% endblock %}

@@ -1,0 +1,62 @@
+{
+  "fixture": "events/valid/sweep-with-correction.json",
+  "projection": {
+    "sweep_id": "5e000000-0000-4000-8000-000000000001",
+    "phase": "finalised",
+    "state": "finalised",
+    "events_seen": 6,
+    "events_accepted": 6,
+    "duplicates_ignored": 0,
+    "identity": {
+      "recording_session_id": "0f000000-0000-4000-8000-00000000000a",
+      "enrollment_id": "0e000000-0000-4000-8000-00000000000b",
+      "step_completion_id": "0c000000-0000-4000-8000-00000000000c",
+      "protocol_id": "fixture-room-sweep",
+      "protocol_sha256": "b33e25d256344f01b2991c38afda5dc1592ba801a6cb6e17fac120f3ebc1e24a",
+      "mode": "room_sweep_cumulative",
+      "room_id": "fixture-room-a",
+      "coverage_version": "c1"
+    },
+    "start_mono_ns": "100000000000",
+    "end_mono_ns": "250000000000",
+    "checkpoints": [
+      {
+        "event_id": "e0000000-0000-4000-8000-000000000002",
+        "sequence": 2,
+        "count": 4,
+        "mono_ns": "130000000000",
+        "corrected_by": null
+      },
+      {
+        "event_id": "e0000000-0000-4000-8000-000000000003",
+        "sequence": 3,
+        "count": 6,
+        "mono_ns": "160000000000",
+        "corrected_by": "e0000000-0000-4000-8000-000000000004"
+      },
+      {
+        "event_id": "e0000000-0000-4000-8000-000000000005",
+        "sequence": 5,
+        "count": 8,
+        "mono_ns": "220000000000",
+        "corrected_by": null
+      }
+    ],
+    "corrections": 1,
+    "final_count": 8,
+    "coverage": "complete",
+    "coverage_reason": null,
+    "occupancy_stability": "stable",
+    "activity": "mixed",
+    "duplicate_risk": "possible",
+    "observer_excluded": true,
+    "observers_in_area": 1,
+    "abort_reason": null,
+    "on_air_events": {
+      "true": 6,
+      "false": 0,
+      "unknown": 0
+    },
+    "errors": []
+  }
+}

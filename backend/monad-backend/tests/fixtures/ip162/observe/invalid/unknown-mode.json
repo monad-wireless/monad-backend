@@ -1,0 +1,23 @@
+{
+  "description": "An unknown mode fails explicitly on a new client. It is not read as a sweep and not as a partial view.",
+  "expect_problem": "mode",
+  "config": {
+    "schema": "monad-quest/observe/v2",
+    "mode": "sector_census",
+    "prompt": "People counted so far",
+    "protocol_id": "fixture-room-sweep",
+    "protocol_sha256": "b33e25d256344f01b2991c38afda5dc1592ba801a6cb6e17fac120f3ebc1e24a",
+    "rooms": [
+      {
+        "room_id": "fixture-room-a",
+        "floor_id": "test-lab-synth-floor-0",
+        "label": "Fixture room A",
+        "geometry_version": "g1",
+        "coverage_version": "c1",
+        "coverage_instructions": "Walk the fixture loop once, clockwise, and count each other person once."
+      }
+    ],
+    "checkpoints": {"min_checkpoints": 2, "required_for_complete": false},
+    "observer_convention": "exclude_self"
+  }
+}
