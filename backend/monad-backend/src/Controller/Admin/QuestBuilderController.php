@@ -4,12 +4,14 @@ namespace App\Controller\Admin;
 
 use App\Entity\LabPlacement;
 use App\Entity\Quest;
+use App\Entity\QuestRevision;
 use App\Entity\QuestStep;
 use App\Entity\User;
 use App\Enum\QuestStepType;
 use App\Form\QuestHeaderData;
 use App\Form\QuestHeaderType;
 use App\Quest\QuestPreflight;
+use App\Quest\QuestRevisionWriter;
 use App\Quest\QuestSpecMapper;
 use App\Quest\Schema\FieldSpec;
 use App\Quest\Schema\StepSchemaRegistry;
@@ -46,9 +48,11 @@ use Symfony\Component\Uid\Uuid;
  * constraint on QuestStep::$config, and violations come back per step index. Preflight
  * (QuestPreflight) is rendered on every GET and POST; it warns and never blocks.
  *
- * The lock rule is `lab_quest_update`'s: a quest with any step completion keeps its step rows
- * (the FK on quest_step_completions.step_id has no ON DELETE clause), so the island is
- * read-only and the page offers Duplicate; header fields stay editable.
+ * Versioning (2026-10-15): a quest is ONE row per name and is edited in place, run or not. Every
+ * completion freezes its own step_snapshot (Version20260920180000), so nothing needs the old
+ * lock or the "Duplicate as revision" action that created "<name> (YYYY-MM)" rows. A save whose
+ * steps differ publishes the next revision through {@see QuestRevisionWriter}; the page shows the
+ * current revision and how many runs it holds.
  */
 #[IsGranted('ROLE_SUPERADMIN')]
 class QuestBuilderController extends AbstractController
@@ -68,6 +72,7 @@ class QuestBuilderController extends AbstractController
         private readonly StepSchemaRegistry $registry,
         private readonly QuestSpecMapper $mapper,
         private readonly QuestPreflight $preflight,
+        private readonly QuestRevisionWriter $revisions,
     ) {
     }
 
@@ -96,7 +101,6 @@ class QuestBuilderController extends AbstractController
     private function form(Request $request, ?Quest $quest): Response
     {
         $isNew = $quest === null;
-        $locked = !$isNew && $this->completions->countForQuest($quest) > 0;
         $storedSteps = $isNew ? [] : $this->stepsOf($quest);
 
         if ($isNew) {
@@ -119,27 +123,22 @@ class QuestBuilderController extends AbstractController
         $saved = false;
 
         if ($form->isSubmitted()) {
-            if ($locked) {
-                // The island is read-only: whatever was posted, the stored steps stand, and
-                // the session features on the start step stand with them.
-                $fixed = QuestHeaderData::fromQuest($quest);
-                $data->featureBroadcast = $fixed->featureBroadcast;
-                $data->featureTrack = $fixed->featureTrack;
-                $data->featureWitness = $fixed->featureWitness;
-                $data->featureIlluminator = $fixed->featureIlluminator;
-            } else {
-                $steps = self::decodeSteps($data->stepsJson);
-                if ($steps === null) {
-                    $form->get('stepsJson')->addError(new FormError('The step list is not valid JSON.'));
-                    $steps = $storedSteps;
-                }
-                $steps = self::withFeatures($steps, $data->features());
+            $steps = self::decodeSteps($data->stepsJson);
+            if ($steps === null) {
+                $form->get('stepsJson')->addError(new FormError('The step list is not valid JSON.'));
+                $steps = $storedSteps;
             }
+            $steps = self::withFeatures($steps, $data->features());
 
             $built = $this->mapper->buildSteps($steps);
             $stepViolations = $built['violations'];
             foreach (QuestSpecMapper::routeViolations($data->parsedRoutes(), QuestSpecMapper::normaliseSteps($steps)) as $message) {
                 $form->get('routes')->addError(new FormError($message));
+            }
+
+            $taken = $data->name !== null ? $this->quests->findOneBy(['name' => trim((string) $data->name)]) : null;
+            if ($taken !== null && $taken !== $quest) {
+                $form->get('name')->addError(new FormError('Another quest has this name. Edit that quest instead: a quest is versioned in place.'));
             }
 
             if ($form->isValid() && $stepViolations === []) {
@@ -150,17 +149,19 @@ class QuestBuilderController extends AbstractController
                 $spec = self::specFromData($data, $steps);
                 $derived = $this->preflight->run($spec, [])['required_capabilities'];
                 $data->applyTo($quest, $derived);
-                if (!$locked) {
-                    $this->replaceSteps($quest, $built['steps'], $isNew);
-                }
                 $this->entityManager->persist($quest);
+                $published = $this->revisions->publish($quest, $built['steps'], $this->author(), QuestRevision::SOURCE_ADMIN);
                 $this->entityManager->flush();
                 $saved = true;
             }
         }
 
         if ($saved) {
-            $this->addFlash('success', sprintf('%s "%s".', $isNew ? 'Created' : 'Saved', $quest->getName()));
+            $this->addFlash('success', match (true) {
+                $isNew => sprintf('Created "%s" (revision %d).', $quest->getName(), $published['revision']),
+                $published['changed'] => sprintf('Saved "%s" as revision %d. Runs already started keep the steps they were served.', $quest->getName(), $published['revision']),
+                default => sprintf('Saved "%s"; the steps are unchanged (revision %d).', $quest->getName(), $published['revision']),
+            });
 
             return $this->redirectToRoute('admin_lab_quests_edit', ['id' => $quest->getId()?->toRfc4122()]);
         }
@@ -173,8 +174,8 @@ class QuestBuilderController extends AbstractController
         return $this->render('admin/quests/edit.html.twig', [
             'quest' => $quest,
             'form' => $form,
-            'locked' => $locked,
-            'completions' => $locked ? $this->completions->countForQuest($quest) : 0,
+            'revision' => $quest?->getRevision() ?? 0,
+            'completions' => $isNew ? 0 : $this->completions->countForQuest($quest),
             'floor' => $floor,
             'floors' => $this->placements->floors(),
             'steps_json' => self::encode($steps),
@@ -197,46 +198,6 @@ class QuestBuilderController extends AbstractController
     }
 
     // ── actions ──────────────────────────────────────────────────────────────────────────────
-
-    /** A revision: the quest and its steps copied, the window reset, the name suffixed with the month. */
-    #[AdminRoute(path: '/lab/quests/{id}/duplicate', name: 'lab_quests_duplicate', options: self::UUID + ['methods' => ['POST']])]
-    public function duplicate(Request $request, string $id): Response
-    {
-        $this->checkCsrf($request);
-        $source = $this->questOr404($id);
-
-        $copy = new Quest();
-        $copy->setName($this->revisionName((string) $source->getName()));
-        $copy->setDescription((string) $source->getDescription());
-        $copy->setAudience($source->getAudience());
-        $copy->setAvailableFrom(new \DateTime());
-        $copy->setAvailableTo(null);
-        $copy->setPoints($source->getPoints());
-        $copy->setEstimatedDuration($source->getEstimatedDuration());
-        $copy->setRecurrence($source->getRecurrence());
-        $copy->setRequiredCapabilities($source->getRequiredCapabilities());
-        $copy->setRoutePolicy($source->getRoutePolicy());
-        $copy->setFeaturedImage($source->getFeaturedImage());
-        $copy->setCreatedBy($this->author());
-        foreach ($source->getArmedDevices() as $device) {
-            $copy->addArmedDevice($device);
-        }
-        foreach ($source->getSteps() as $step) {
-            $clone = (new QuestStep())
-                ->setName((string) $step->getName())
-                ->setType($step->getType())
-                ->setOrder((int) $step->getOrder())
-                ->setConfig($step->getConfig());
-            $copy->addStep($clone);
-            $this->entityManager->persist($clone);
-        }
-
-        $this->entityManager->persist($copy);
-        $this->entityManager->flush();
-        $this->addFlash('success', sprintf('Duplicated as "%s". The window starts now and never closes; adjust it before it goes live.', $copy->getName()));
-
-        return $this->redirectToRoute('admin_lab_quests_edit', ['id' => $copy->getId()?->toRfc4122()]);
-    }
 
     /** `lab_quest_update available_to="now"`: stops the offer, keeps every enrolment and completion. */
     #[AdminRoute(path: '/lab/quests/{id}/hide', name: 'lab_quests_hide', options: self::UUID + ['methods' => ['POST']])]
@@ -272,8 +233,8 @@ class QuestBuilderController extends AbstractController
     /**
      * Create or replace by name from a `lab_quest_write` payload, pasted or uploaded.
      *
-     * The same rules as the MCP tool: every step validated before anything is written, and a
-     * quest with completions is refused (the tool learns that from the FK; this asks first).
+     * The same rules as the MCP tool: every step validated before anything is written, and an
+     * existing name is replaced in place as its next revision, run or not.
      */
     #[AdminRoute(path: '/lab/quests/import', name: 'lab_quests_import', options: ['methods' => ['POST']])]
     public function import(Request $request): Response
@@ -304,12 +265,6 @@ class QuestBuilderController extends AbstractController
             $name = trim((string) ($spec['name'] ?? ''));
             $quest = $name === '' ? null : $this->quests->findOneBy(['name' => $name]);
             $existed = $quest !== null;
-            if ($existed && $this->completions->countForQuest($quest) > 0) {
-                $errors[] = sprintf(
-                    '"%s" has step completions, so its steps cannot be replaced. Import under a new name, or open it and use Duplicate.',
-                    $name,
-                );
-            }
             $quest ??= new Quest();
 
             $built = $this->mapper->buildSteps($spec['steps']);
@@ -343,11 +298,18 @@ class QuestBuilderController extends AbstractController
         $derived = $this->preflight->run($spec, [])['required_capabilities'];
         $declared = is_array($spec['required_capabilities'] ?? null) ? array_filter($spec['required_capabilities'], 'is_string') : [];
         $quest->setRequiredCapabilities(array_merge(array_values($declared), $derived));
-        $this->replaceSteps($quest, $built['steps'], !$existed);
         $this->entityManager->persist($quest);
+        $published = $this->revisions->publish($quest, $built['steps'], $this->author(), QuestRevision::SOURCE_IMPORT);
         $this->entityManager->flush();
 
-        $this->addFlash('success', sprintf('%s "%s" with %d step(s).', $existed ? 'Replaced' : 'Created', $quest->getName(), count($built['steps'])));
+        $this->addFlash('success', sprintf(
+            '%s "%s" with %d step(s), revision %d%s.',
+            $existed ? 'Replaced' : 'Created',
+            $quest->getName(),
+            count($built['steps']),
+            $published['revision'],
+            $published['changed'] ? '' : ' (steps unchanged)',
+        ));
 
         return $this->redirectToRoute('admin_lab_quests_edit', ['id' => $quest->getId()?->toRfc4122()]);
     }
@@ -365,7 +327,7 @@ class QuestBuilderController extends AbstractController
                 'quest' => $quest,
                 'status' => QuestSpecMapper::status($quest),
                 'completions' => $counts[$id] ?? 0,
-                'locked' => ($counts[$id] ?? 0) > 0,
+                'revision' => $quest->getRevision(),
             ];
         }
 
@@ -403,45 +365,6 @@ class QuestBuilderController extends AbstractController
         if (!$this->isCsrfTokenValid(self::CSRF_ID, (string) $request->request->get('_token'))) {
             throw $this->createAccessDeniedException('Invalid CSRF token.');
         }
-    }
-
-    /**
-     * Replace the stored step rows, the way `lab_quest_write` does: the DELETEs reach the
-     * database before the INSERTs, because (quest_id, order) is unique and Doctrine emits
-     * INSERTs first within one flush.
-     *
-     * @param list<QuestStep> $steps
-     */
-    private function replaceSteps(Quest $quest, array $steps, bool $isNew): void
-    {
-        if (!$isNew) {
-            foreach ($quest->getSteps()->toArray() as $old) {
-                $quest->removeStep($old);
-            }
-            $this->entityManager->flush();
-        }
-        foreach ($steps as $step) {
-            $quest->addStep($step);
-            $this->entityManager->persist($step);
-        }
-    }
-
-    /**
-     * The revision name: the month appended, unless it already is. A second revision in the
-     * same month would collide with the first, and `lab_quest_read` keys on name, so the
-     * collision gets a counter.
-     */
-    private function revisionName(string $name, ?\DateTimeImmutable $today = null): string
-    {
-        $suffix = ' (' . ($today ?? new \DateTimeImmutable())->format('Y-m') . ')';
-        $base = str_ends_with($name, $suffix) ? $name : $name . $suffix;
-
-        $candidate = $base;
-        for ($n = 2; $this->quests->findOneBy(['name' => $candidate]) !== null; ++$n) {
-            $candidate = $base . ' ' . $n;
-        }
-
-        return $candidate;
     }
 
     private function floor(Request $request): string

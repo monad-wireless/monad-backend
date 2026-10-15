@@ -50,9 +50,13 @@ mcp:
            Since 2026-09-20 every enrollment freezes the steps it was served
            (`quest_step_completions.step_snapshot`), so a finished run reports what it
            actually asked of the person who walked it however the quest changes later.
-           Edit a quest; do not publish a second generation of it. The catalogue's
-           "(retired 2026-08)" duplicates exist only because the old schema refused an
-           edit, and nothing needs that workaround now.
+           Edit a quest; do not publish a second generation of it. Since 2026-10-15 a quest
+           name is unique and every changed step set is the quest's next REVISION: the
+           write returns `revision` and `steps_changed`, each enrollment records the
+           revision it was served, and lab_quest_revisions lists the history. Omit
+           available_from on a replace to keep the live window. The catalogue's
+           "(retired 2026-08)" rows are hidden earlier generations from before edits
+           were possible.
            Use lab_quest_update when only the quest ROW changes — it does not touch the
            steps, so it is the cheaper call and the one that cannot renumber anything.
            `available_to: "now"` hides a quest, `"never"` re-opens it, and points /

@@ -58,9 +58,10 @@ final class QuestBuilderControllerTest extends KernelTestCase
     private function scrub(): void
     {
         $c = $this->em->getConnection();
+        // By enrollment, not by step: a rewritten quest leaves its completions with step_id NULL.
         $c->executeStatement(
-            'DELETE FROM quest_step_completions WHERE step_id IN '
-            . '(SELECT s.id FROM quest_steps s JOIN quests q ON q.id = s.quest_id WHERE q.name LIKE :n)',
+            'DELETE FROM quest_step_completions WHERE enrollment_id IN '
+            . '(SELECT e.id FROM quest_enrollments e JOIN quests q ON q.id = e.quest_id WHERE q.name LIKE :n)',
             ['n' => self::QUEST_PREFIX . '%'],
         );
         $c->executeStatement(
@@ -130,6 +131,11 @@ final class QuestBuilderControllerTest extends KernelTestCase
             ->setStatus(QuestStepCompletionStatus::COMPLETED);
         $this->em->persist($completion);
         $this->em->flush();
+        // The kernel under test shares this entity manager. A request never has another run's
+        // completion managed, so detach it, or Doctrine follows completion->step to the step a
+        // rewrite just deleted (QuestWriteOverRunsTest documents the same trap).
+        $this->em->detach($completion);
+        $this->em->detach($enrollment);
     }
 
     // ── the session the admin firewall expects ──────────────────────────────────────────────
@@ -243,35 +249,45 @@ final class QuestBuilderControllerTest extends KernelTestCase
         self::assertSame(Response::HTTP_NOT_FOUND, $response->getStatusCode());
     }
 
-    // ── the lock rule ───────────────────────────────────────────────────────────────────────
+    // ── versioning in place (2026-10-15) ────────────────────────────────────────────────────
 
-    public function testAQuestWithAStepCompletionLocksTheIslandAndOffersDuplicate(): void
+    public function testAQuestThatHasBeenRunStaysEditableAndOffersNoDuplicate(): void
     {
-        $quest = $this->makeQuest('locked');
+        $quest = $this->makeQuest('run');
         $this->completeAStepOf($quest);
 
         $response = $this->call('/admin/lab/quests/' . $quest->getId()?->toRfc4122() . '/edit', $this->admin);
 
         self::assertSame(Response::HTTP_OK, $response->getStatusCode());
         $html = (string) $response->getContent();
-        self::assertStringContainsString('data-locked="1"', $html);
+        self::assertStringContainsString('data-locked="0"', $html);
         self::assertStringContainsString('step completion(s)', $html);
-        self::assertStringContainsString('Duplicate as revision', $html);
-        // The header stays editable: the save button is still a save, not a read-only notice.
-        self::assertStringContainsString('Header only.', $html);
+        self::assertStringContainsString('publishes revision 1', $html);
+        self::assertStringNotContainsString('Duplicate', $html);
     }
 
-    public function testTheIndexMarksALockedQuestAndCountsItsCompletions(): void
+    public function testTheIndexShowsTheRevisionAndNoDuplicateAction(): void
     {
-        $open = $this->makeQuest('open');
-        $locked = $this->makeQuest('locked');
-        $this->completeAStepOf($locked);
+        $quest = $this->makeQuest('indexed');
+        $this->completeAStepOf($quest);
 
         $html = (string) $this->call('/admin/lab/quests', $this->admin)->getContent();
 
-        self::assertStringContainsString($open->getName(), $html);
-        self::assertStringContainsString($locked->getName(), $html);
-        self::assertStringContainsString('locked', $html);
+        self::assertStringContainsString($quest->getName(), $html);
+        self::assertStringContainsString('Revision', $html);
+        self::assertStringNotContainsString('/duplicate', $html);
+    }
+
+    public function testTheDuplicateRouteIsGone(): void
+    {
+        $quest = $this->makeQuest('noduplicate');
+
+        $response = $this->call('/admin/lab/quests/' . $quest->getId()?->toRfc4122() . '/duplicate', $this->admin, 'POST', ['_token' => 'tok'], ['quest_builder' => 'tok']);
+
+        self::assertSame(Response::HTTP_NOT_FOUND, $response->getStatusCode());
+        self::assertCount(1, $this->em->getRepository(Quest::class)->createQueryBuilder('q')
+            ->andWhere('q.name LIKE :n')->setParameter('n', self::QUEST_PREFIX . 'noduplicate%')
+            ->getQuery()->getResult());
     }
 
     /**
@@ -318,6 +334,39 @@ final class QuestBuilderControllerTest extends KernelTestCase
         $saved = $this->em->getRepository(Quest::class)->find($quest->getId());
         self::assertSame(self::QUEST_PREFIX . 'save renamed', $saved?->getName());
         self::assertCount(2, $saved->getSteps(), 'the observe step was removed by the island');
+        self::assertSame(1, $saved->getRevision(), 'the first recorded step set is revision 1');
+    }
+
+    public function testSavingTheSameStepsAgainPublishesNoNewRevision(): void
+    {
+        $quest = $this->makeQuest('same');
+        $id = (string) $quest->getId()?->toRfc4122();
+        $steps = [
+            ['name' => 'Before you start', 'type' => 'start', 'config' => []],
+            ['name' => 'Run complete', 'type' => 'finish', 'config' => []],
+        ];
+
+        $this->call('/admin/lab/quests/' . $id . '/edit', $this->admin, 'POST', self::headerPost((string) $quest->getName(), $steps, 'tok'), ['quest_header' => 'tok']);
+        $this->call('/admin/lab/quests/' . $id . '/edit', $this->admin, 'POST', self::headerPost((string) $quest->getName(), $steps, 'tok'), ['quest_header' => 'tok']);
+
+        self::assertSame(1, $this->em->getRepository(Quest::class)->find($quest->getId())?->getRevision());
+    }
+
+    public function testRenamingOntoAnotherQuestsNameIsRefused(): void
+    {
+        $taken = $this->makeQuest('taken');
+        $quest = $this->makeQuest('renamer');
+        $id = (string) $quest->getId()?->toRfc4122();
+
+        $response = $this->call('/admin/lab/quests/' . $id . '/edit', $this->admin, 'POST', self::headerPost(
+            (string) $taken->getName(),
+            [['name' => 'Before you start', 'type' => 'start', 'config' => []]],
+            'tok',
+        ), ['quest_header' => 'tok']);
+
+        self::assertSame(Response::HTTP_UNPROCESSABLE_ENTITY, $response->getStatusCode(), 're-rendered with the error');
+        self::assertStringContainsString('Another quest has this name', (string) $response->getContent());
+        self::assertSame(self::QUEST_PREFIX . 'renamer', $this->em->getRepository(Quest::class)->find($quest->getId())?->getName());
     }
 
     public function testAStepViolationBlocksTheSaveAndNamesTheStepIndex(): void
@@ -345,42 +394,31 @@ final class QuestBuilderControllerTest extends KernelTestCase
         self::assertCount(3, $untouched->getSteps());
     }
 
-    public function testALockedQuestSavesItsHeaderAndKeepsItsStepRows(): void
+    public function testAQuestThatHasBeenRunSavesNewStepsAsTheNextRevision(): void
     {
-        $quest = $this->makeQuest('lockpost');
+        $quest = $this->makeQuest('runpost');
         $this->completeAStepOf($quest);
         $id = (string) $quest->getId()?->toRfc4122();
 
-        // The island is read-only, so a posted step list is not what the server writes. This is
-        // the rule stated as an attack: post two steps at a quest whose three are pointed at by a
-        // completion, and the three must still be there.
         $response = $this->call('/admin/lab/quests/' . $id . '/edit', $this->admin, 'POST', self::headerPost(
-            self::QUEST_PREFIX . 'lockpost renamed',
+            (string) $quest->getName(),
             [['name' => 'Before you start', 'type' => 'start', 'config' => []]],
             'tok',
         ), ['quest_header' => 'tok']);
 
-        self::assertTrue($response->isRedirection(), 'the header save succeeds; got ' . $response->getStatusCode());
+        self::assertTrue($response->isRedirection(), 'the save succeeds; got ' . $response->getStatusCode());
 
         $saved = $this->em->getRepository(Quest::class)->find($quest->getId());
-        self::assertSame(self::QUEST_PREFIX . 'lockpost renamed', $saved?->getName(), 'the header stays editable');
-        self::assertCount(3, $saved->getSteps(), 'the step rows the completion points at are kept');
-        self::assertSame(
-            ['start', 'observe', 'finish'],
-            array_map(static fn (QuestStep $s): ?string => $s->getType()?->value, $saved->getSteps()->toArray()),
-        );
+        self::assertCount(1, $saved?->getSteps(), 'the steps are replaced in place');
+        self::assertSame(1, $saved->getRevision());
+        self::assertCount(1, $this->em->getRepository(Quest::class)->findBy(['name' => $quest->getName()]), 'still one quest');
+        self::assertSame(1, (int) $this->em->getConnection()->fetchOne(
+            'SELECT COUNT(*) FROM quest_step_completions c JOIN quest_enrollments e ON e.id = c.enrollment_id WHERE e.quest_id = :q',
+            ['q' => (string) $quest->getId()],
+        ), 'the run survives the rewrite');
     }
 
-    // ── duplicate and hide ──────────────────────────────────────────────────────────────────
-
-    public function testDuplicateWithoutACsrfTokenIsRefused(): void
-    {
-        $quest = $this->makeQuest('csrf');
-
-        $response = $this->call('/admin/lab/quests/' . $quest->getId()?->toRfc4122() . '/duplicate', $this->admin, 'POST');
-
-        self::assertSame(Response::HTTP_FORBIDDEN, $response->getStatusCode());
-    }
+    // ── hide ────────────────────────────────────────────────────────────────────────────────
 
     public function testHideWithoutACsrfTokenIsRefusedAndTheWindowIsUntouched(): void
     {
@@ -391,34 +429,6 @@ final class QuestBuilderControllerTest extends KernelTestCase
 
         self::assertSame(Response::HTTP_FORBIDDEN, $response->getStatusCode());
         self::assertNull($this->em->getRepository(Quest::class)->find($quest->getId())?->getAvailableTo());
-    }
-
-    public function testDuplicateCopiesTheStepsResetsTheWindowAndSuffixesTheMonth(): void
-    {
-        $quest = $this->makeQuest('dup');
-        $quest->setAvailableTo(new \DateTime('2026-09-30T00:00:00+00:00'));
-        $this->em->flush();
-        $id = (string) $quest->getId()?->toRfc4122();
-
-        $response = $this->call('/admin/lab/quests/' . $id . '/duplicate', $this->admin, 'POST', ['_token' => 'tok'], ['quest_builder' => 'tok']);
-
-        self::assertTrue($response->isRedirection(), 'got ' . $response->getStatusCode());
-
-        $copies = $this->em->getRepository(Quest::class)->createQueryBuilder('q')
-            ->andWhere('q.name LIKE :n')->setParameter('n', self::QUEST_PREFIX . 'dup (%')
-            ->getQuery()->getResult();
-
-        self::assertCount(1, $copies);
-        $copy = $copies[0];
-        self::assertSame(self::QUEST_PREFIX . 'dup (' . (new \DateTimeImmutable())->format('Y-m') . ')', $copy->getName());
-        self::assertNull($copy->getAvailableTo(), 'the window reopens; the copy is a revision, not a republication');
-        self::assertCount(3, $copy->getSteps());
-        self::assertSame(
-            ['prompt' => 'How many people?', 'min_readings' => 3],
-            $copy->getSteps()->toArray()[1]->getConfig(),
-        );
-        // The source is untouched.
-        self::assertNotNull($this->em->getRepository(Quest::class)->find($quest->getId())?->getAvailableTo());
     }
 
     public function testHideSetsAvailableToNow(): void
@@ -490,9 +500,9 @@ final class QuestBuilderControllerTest extends KernelTestCase
         self::assertCount(1, $this->em->getRepository(Quest::class)->findBy(['name' => $quest->getName()]));
     }
 
-    public function testImportIsRefusedForAQuestWithCompletionsAndWritesNothing(): void
+    public function testImportReplacesAQuestThatHasBeenRunAsItsNextRevision(): void
     {
-        $quest = $this->makeQuest('guarded');
+        $quest = $this->makeQuest('imported-over-runs');
         $this->completeAStepOf($quest);
 
         $response = $this->call('/admin/lab/quests/import', $this->admin, 'POST', [
@@ -502,9 +512,14 @@ final class QuestBuilderControllerTest extends KernelTestCase
             ]),
         ], ['quest_builder' => 'tok']);
 
-        self::assertSame(Response::HTTP_OK, $response->getStatusCode(), 'the index is re-rendered with the refusal');
-        self::assertStringContainsString('has step completions', (string) $response->getContent());
-        self::assertCount(3, $this->em->getRepository(Quest::class)->find($quest->getId())?->getSteps());
+        self::assertTrue($response->isRedirection(), 'got ' . $response->getStatusCode());
+        $saved = $this->em->getRepository(Quest::class)->find($quest->getId());
+        self::assertCount(1, $saved?->getSteps());
+        self::assertSame(1, $saved->getRevision());
+        self::assertSame('import', $this->em->getConnection()->fetchOne(
+            'SELECT source FROM quest_revisions WHERE quest_id = :q AND revision = 1',
+            ['q' => (string) $quest->getId()],
+        ));
     }
 
     public function testImportShowsTheStepViolationsAndWritesNothing(): void

@@ -219,6 +219,65 @@ final class QuestWriteOverRunsTest extends KernelTestCase
         self::assertSame('walk_to', $snapshot['type']);
     }
 
+    // ── revisions (2026-10-15) ──────────────────────────────────────────────────────────────
+
+    public function testEachChangedStepSetIsTheNextRevisionAndAnIdenticalWriteIsNot(): void
+    {
+        $quest = $this->questWithARun('revisions');
+        $name = (string) $quest->getName();
+
+        $first = $this->tools->questWrite(name: $name, description: 'r1', steps: $this->newSteps());
+        $same = $this->tools->questWrite(name: $name, description: 'r1 again', steps: $this->newSteps());
+        $changed = $this->newSteps();
+        $changed[1]['config']['location'] = 'monad09';
+        $second = $this->tools->questWrite(name: $name, description: 'r2', steps: $changed);
+
+        self::assertSame([1, true], [$first['revision'], $first['steps_changed']]);
+        self::assertSame([1, false], [$same['revision'], $same['steps_changed']]);
+        self::assertSame([2, true], [$second['revision'], $second['steps_changed']]);
+
+        $history = $this->tools->questRevisions($name);
+        self::assertSame(2, $history['current_revision']);
+        self::assertSame([2, 1], array_column($history['revisions'], 'revision'));
+        self::assertSame('monad09', $history['revisions'][0]['steps'][1]['config']['location']);
+        self::assertSame('monad07', $history['revisions'][1]['steps'][1]['config']['location']);
+        self::assertSame('mcp', $history['revisions'][0]['source']);
+        self::assertSame(1, $history['runs_before_revisions'], 'the fixture run predates revisions');
+        self::assertCount(1, $this->em->getRepository(Quest::class)->findBy(['name' => $name]), 'one row per name');
+    }
+
+    public function testOmittingAvailableFromOnAReplaceKeepsTheLiveWindow(): void
+    {
+        $quest = $this->questWithARun('window');
+
+        $this->tools->questWrite(name: (string) $quest->getName(), description: 'kept window', steps: $this->newSteps());
+        $this->em->clear();
+
+        $saved = $this->em->getRepository(Quest::class)->findOneBy(['name' => $quest->getName()]);
+        self::assertSame('2026-09-01', $saved?->getAvailableFrom()?->format('Y-m-d'));
+        self::assertSame('2027-06-30', $saved->getAvailableTo()?->format('Y-m-d'));
+    }
+
+    public function testANewQuestStillNeedsAvailableFrom(): void
+    {
+        $result = $this->tools->questWrite(name: self::QUEST_PREFIX . 'no window', description: 'x', steps: $this->newSteps());
+
+        self::assertArrayHasKey('error', $result);
+        self::assertNull($this->em->getRepository(Quest::class)->findOneBy(['name' => self::QUEST_PREFIX . 'no window']));
+    }
+
+    public function testTheDatabaseRefusesASecondQuestWithTheSameName(): void
+    {
+        $quest = $this->questWithARun('unique');
+
+        $this->expectException(\Doctrine\DBAL\Exception\UniqueConstraintViolationException::class);
+        $this->em->getConnection()->executeStatement(
+            'INSERT INTO quests (id, name, description, available_from, created_by_id, points, required_capabilities, created_at, updated_at, audience, revision) '
+            . "SELECT gen_random_uuid(), name, description, available_from, created_by_id, points, required_capabilities, created_at, updated_at, audience, 0 FROM quests WHERE id = :id",
+            ['id' => (string) $quest->getId()],
+        );
+    }
+
     public function testADeleteThatTheDatabaseRefusesSaysWhy(): void
     {
         // Deleting a quest with enrollments is still refused — quest_enrollments.quest_id is

@@ -514,6 +514,8 @@ class QuestController extends AbstractController
         $enrollment = new QuestEnrollment();
         $enrollment->setUser($user);
         $enrollment->setQuest($quest);
+        // The step set this run is served, so a run joins its revision without comparing text.
+        $enrollment->setQuestRevision($quest->getRevision() > 0 ? $quest->getRevision() : null);
         $enrollment->setDevice($device);
         $enrollment->setCompletedAt(null);
 

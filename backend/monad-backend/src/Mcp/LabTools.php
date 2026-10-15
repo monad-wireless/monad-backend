@@ -4,10 +4,12 @@ namespace App\Mcp;
 
 use App\Entity\LabPlacement;
 use App\Entity\Quest;
+use App\Entity\QuestRevision;
 use App\Entity\QuestStep;
 use App\Entity\User;
 use App\Enum\QuestStepType;
 use App\Lab\Contract\CountingContracts;
+use App\Quest\QuestRevisionWriter;
 use App\Repository\LabPlacementRepository;
 use App\Service\GroundTruthService;
 use App\Service\LabConfigService;
@@ -39,6 +41,7 @@ class LabTools
         private readonly GroundTruthService $groundTruth,
         private readonly Security $security,
         private readonly ValidatorInterface $validator,
+        private readonly QuestRevisionWriter $revisions,
     ) {
     }
 
@@ -73,6 +76,7 @@ class LabTools
             // find: an operator quest and a public one looked identical here, so the only way
             // to check the gate was to read the whole quest back or hit the public API.
             'audience' => $q->getAudience(),
+            'revision' => $q->getRevision(),
             'points' => $q->getPoints(),
             'available_from' => $q->getAvailableFrom()?->format(\DateTimeInterface::ATOM),
             'available_to' => $q->getAvailableTo()?->format(\DateTimeInterface::ATOM),
@@ -131,12 +135,59 @@ class LabTools
             'audience' => $quest->getAudience(),
             'route_policy' => $quest->getRoutePolicy(),
             'created_by' => $quest->getCreatedBy()?->getEmail(),
+            // Informational: lab_quest_write ignores it and assigns the next revision itself.
+            'revision' => $quest->getRevision(),
             'steps' => array_map(static fn (QuestStep $s): array => [
                 'order' => $s->getOrder(),
                 'name' => $s->getName(),
                 'type' => $s->getType()?->value,
                 'config' => $s->getConfig(),
             ], $steps),
+        ];
+    }
+
+    /**
+     * The published step sets of one quest, newest first, with how many runs each one served.
+     *
+     * @return array<string, mixed>
+     */
+    #[McpTool(
+        name: 'lab_quest_revisions',
+        description: 'History of one quest by name: every published step set (revision, when, by whom, '
+            . 'through which path, required capabilities, steps) newest first, and how many enrollments '
+            . 'started on each. Revision 1 of a quest that existed before 2026-10-15 is its steps at '
+            . 'migration time (source "migration"); runs before that carry quest_revision NULL and their '
+            . 'own step_snapshot.',
+    )]
+    public function questRevisions(string $name, bool $include_steps = true): array
+    {
+        $quest = $this->entityManager->getRepository(Quest::class)->findOneBy(['name' => $name]);
+        if ($quest === null) {
+            return ['error' => sprintf('No quest named "%s".', $name)];
+        }
+
+        $runs = [];
+        foreach ($this->entityManager->getConnection()->fetchAllAssociative(
+            'SELECT quest_revision, COUNT(*) AS n FROM quest_enrollments WHERE quest_id = :q GROUP BY quest_revision',
+            ['q' => (string) $quest->getId()],
+        ) as $row) {
+            $runs[$row['quest_revision'] === null ? 'unrecorded' : (string) $row['quest_revision']] = (int) $row['n'];
+        }
+
+        $revisions = $this->entityManager->getRepository(QuestRevision::class)->findBy(['quest' => $quest], ['revision' => 'DESC']);
+
+        return [
+            'name' => $quest->getName(),
+            'current_revision' => $quest->getRevision(),
+            'runs_before_revisions' => $runs['unrecorded'] ?? 0,
+            'revisions' => array_map(static fn (QuestRevision $r): array => [
+                'revision' => $r->getRevision(),
+                'published_at' => $r->getCreatedAt()->format(\DateTimeInterface::ATOM),
+                'source' => $r->getSource(),
+                'author' => $r->getAuthor()?->getEmail(),
+                'runs' => $runs[(string) $r->getRevision()] ?? 0,
+                'required_capabilities' => $r->getRequiredCapabilities(),
+            ] + ($include_steps ? ['steps' => $r->getSteps()] : []), $revisions),
         ];
     }
 
@@ -203,13 +254,22 @@ class LabTools
             because an unwalkable leg still renders as a short line on a plan.
 
             Both fields are omitted-means-unchanged, so a generator that predates them is unaffected.
+
+            VERSIONING (2026-10-15). A quest is ONE row per name, edited in place; the name is
+            unique. Writing a name that exists REPLACES that quest, including one that has been
+            run: every enrollment froze its own steps. When the steps differ from the stored
+            ones, the quest's revision goes up by one and the full step set is appended to its
+            history (lab_quest_revisions); an identical write changes nothing. Never publish a
+            "v2" under a new name: that is a second quest in the app's list.
+            `available_from` may be omitted on a replace, which keeps the live window; a new
+            quest needs it.
             TXT,
     )]
     public function questWrite(
         string $name,
         string $description,
-        string $available_from,
         array $steps,
+        ?string $available_from = null,
         ?string $available_to = null,
         ?int $estimated_duration = null,
         float $points = 0.0,
@@ -252,9 +312,18 @@ class LabTools
             $quest->setRoutePolicy($routes === [] ? null : ['mode' => 'pool', 'routes' => $routes]);
         }
 
+        if ($available_from === null && !$existed) {
+            return ['error' => sprintf('"%s" is a new quest: available_from is required.', $name)];
+        }
         try {
-            $quest->setAvailableFrom(new \DateTime($available_from));
-            $quest->setAvailableTo($available_to !== null ? new \DateTime($available_to) : null);
+            // Omitted on a replace means the live window stands, so republishing a quest's
+            // steps never moves its opening date.
+            if ($available_from !== null) {
+                $quest->setAvailableFrom(new \DateTime($available_from));
+                $quest->setAvailableTo($available_to !== null ? new \DateTime($available_to) : null);
+            } elseif ($available_to !== null) {
+                $quest->setAvailableTo(new \DateTime($available_to));
+            }
         } catch (\Exception $e) {
             return ['error' => 'Unparseable date: ' . $e->getMessage()];
         }
@@ -363,28 +432,6 @@ class LabTools
             ];
         }
 
-        if ($existed) {
-            foreach ($quest->getSteps()->toArray() as $old) {
-                $quest->removeStep($old);
-            }
-            // The DELETEs have to reach the database before the replacements are inserted:
-            // (quest_id, order) is unique, and Doctrine emits INSERTs first within one flush.
-            //
-            $this->flushOrExplain(
-                sprintf('Replacing the steps of "%s"', $name),
-                'Historically this meant the quest had been run and quest_step_completions '
-                . 'pointed at the rows being deleted. Since 2026-09-20 completions carry their '
-                . 'own step_snapshot and step_id is ON DELETE SET NULL, so a still-failing write '
-                . 'on a quest that has runs means Version20260920180000 has not reached this '
-                . 'container.',
-            );
-        }
-
-        foreach ($built as $step) {
-            $quest->addStep($step);
-            $this->entityManager->persist($step);
-        }
-
         if ($hasProbe && !$broadcastDeclared) {
             $warnings[] = 'This quest has probe steps but its start step does not declare '
                 . 'features.broadcast. Every feature defaults to false, so the identity frame will '
@@ -407,17 +454,20 @@ class LabTools
         }
 
         // `setRequiredCapabilities` dedupes, so the probe/advertise/broadcast overlap is fine.
+        // Set before publishing: the revision records them.
         $quest->setRequiredCapabilities($requiredCapabilities);
 
         $this->entityManager->persist($quest);
-        // A separate flush from the step deletion above, and a separate failure: this one
-        // inserts the new steps and the quest row, so a unique (quest_id, order) collision
-        // or an over-long name lands here rather than there.
+        $published = $this->revisions->publish($quest, $built, $author, QuestRevision::SOURCE_MCP);
+        // Inserts the new steps, the quest row and the revision, so a unique (quest_id, order)
+        // collision or an over-long name lands here.
         $this->flushOrExplain(sprintf('Writing quest "%s"', $name));
 
         return [
             'action' => $existed ? 'replaced' : 'created',
             'name' => $name,
+            'revision' => $published['revision'],
+            'steps_changed' => $published['changed'],
             'steps' => count($steps),
             'warnings' => $warnings,
             'markers' => array_column($this->markers->markers(), 'value'),

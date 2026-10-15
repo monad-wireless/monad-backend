@@ -69,18 +69,17 @@ class QuestStepCompletionRepository extends ServiceEntityRepository
     }
 
     /**
-     * How many completions point at this quest's steps (IP-157).
+     * How many step completions this quest's runs hold (IP-157), for the quest builder.
      *
-     * The lock rule of the quest builder: `quest_step_completions.step_id` has no ON DELETE
-     * clause, so a quest with any completion cannot have its step rows replaced. The same fact
-     * `lab_quest_write` learns from the database, asked before the form is rendered.
+     * Counted through the ENROLLMENT, not the step: a quest edited in place leaves its earlier
+     * runs' completions with step_id NULL (Version20260920180000), and they are still runs.
      */
     public function countForQuest(Quest $quest): int
     {
         return (int) $this->createQueryBuilder('c')
             ->select('COUNT(c.id)')
-            ->join('c.step', 's')
-            ->andWhere('s.quest = :quest')
+            ->join('c.enrollment', 'e')
+            ->andWhere('e.quest = :quest')
             ->setParameter('quest', $quest)
             ->getQuery()
             ->getSingleScalarResult();
@@ -94,9 +93,9 @@ class QuestStepCompletionRepository extends ServiceEntityRepository
     public function countByQuest(): array
     {
         $rows = $this->createQueryBuilder('c')
-            ->select('IDENTITY(s.quest) AS quest_id, COUNT(c.id) AS n')
-            ->join('c.step', 's')
-            ->groupBy('s.quest')
+            ->select('IDENTITY(e.quest) AS quest_id, COUNT(c.id) AS n')
+            ->join('c.enrollment', 'e')
+            ->groupBy('e.quest')
             ->getQuery()
             ->getArrayResult();
 

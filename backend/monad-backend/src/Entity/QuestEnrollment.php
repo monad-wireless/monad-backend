@@ -34,6 +34,14 @@ class QuestEnrollment
     #[Assert\NotNull(message: 'Quest is required')]
     private ?Quest $quest = null;
 
+    /**
+     * The quest revision this run was served (2026-10-15), written once at start. NULL for runs
+     * that started before revisions existed: nobody recorded which step set they saw beyond
+     * each completion's own step_snapshot, and backfilling a number would invent it.
+     */
+    #[ORM\Column(name: 'quest_revision', type: Types::INTEGER, nullable: true)]
+    private ?int $questRevision = null;
+
     #[ORM\Column(type: 'string', enumType: QuestEnrollmentStatus::class)]
     #[Assert\NotNull(message: 'Status is required')]
     private QuestEnrollmentStatus $status = QuestEnrollmentStatus::IN_PROGRESS;
@@ -172,6 +180,18 @@ class QuestEnrollment
     public function setQuest(?Quest $quest): static
     {
         $this->quest = $quest;
+
+        return $this;
+    }
+
+    public function getQuestRevision(): ?int
+    {
+        return $this->questRevision;
+    }
+
+    public function setQuestRevision(?int $questRevision): static
+    {
+        $this->questRevision = $questRevision;
 
         return $this;
     }

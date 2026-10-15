@@ -5,10 +5,6 @@
 
 {% block page_actions %}
     {% if quest %}
-        <form method="post" action="{{ path('admin_lab_quests_duplicate', {id: quest.id}) }}" class="d-inline">
-            <input type="hidden" name="_token" value="{{ csrf_token(csrf) }}">
-            <button type="submit" class="btn btn-secondary">Duplicate{{ locked ? ' as revision' : '' }}</button>
-        </form>
         <form method="post" action="{{ path('admin_lab_quests_hide', {id: quest.id}) }}" class="d-inline" onsubmit="return confirm('Hide {{ quest.name|e('js') }} now? It stops being offered; enrolments and completions stay.');">
             <input type="hidden" name="_token" value="{{ csrf_token(csrf) }}">
             <button type="submit" class="btn btn-secondary">Hide now</button>
@@ -22,7 +18,7 @@
 {% block main %}
     {% if quest %}
         <div class="strip">
-            <span><span class="k">Status</span>{{ quest.availableFrom ? '' : '' }}<span class="state state-muted">{{ locked ? 'locked' : 'open' }}</span></span>
+            <span><span class="k">Revision</span><span class="state state-muted">{{ revision }}</span></span>
             <span><span class="k">Created</span>{{ quest.createdAt|clock }} by {{ quest.createdBy ? quest.createdBy.email : '—' }}</span>
             <span><span class="k">Updated</span>{{ quest.updatedAt|clock }}</span>
             <span><span class="k">Completions</span>{{ completions }}</span>
@@ -30,10 +26,10 @@
         </div>
     {% endif %}
 
-    {% if locked %}
-        <div class="alert alert-warning">
-            This quest has {{ completions }} step completion(s). Its step rows are what they point at, so the steps below are
-            read-only and the session features with them; the header saves as usual. For a new step list, <strong>Duplicate as revision</strong>.
+    {% if completions > 0 %}
+        <div class="alert alert-info">
+            This quest has {{ completions }} step completion(s). Each run keeps the steps it was served, so you can edit the
+            steps here: saving a changed step list publishes revision {{ revision + 1 }} under the same name.
         </div>
     {% endif %}
 
@@ -92,10 +88,10 @@
                     <div class="card-header">Session features (start step)</div>
                     <div class="card-body">
                         <p class="text-muted small">Declared once on the start step and on for the whole run. Every flag defaults to off, so a probe quest without broadcast records dwells with nothing on air.</p>
-                        {{ form_row(form.featureBroadcast, {label: 'broadcast: the lab identity frame on air for the whole session', disabled: locked}) }}
-                        {{ form_row(form.featureTrack, {label: 'track: record the trajectory (pose stream)', disabled: locked}) }}
-                        {{ form_row(form.featureWitness, {label: 'witness: monitor the beacon zones', disabled: locked}) }}
-                        {{ form_row(form.featureIlluminator, {label: 'illuminator: generate traffic for the CSI receivers (inert without an access point)', disabled: locked}) }}
+                        {{ form_row(form.featureBroadcast, {label: 'broadcast: the lab identity frame on air for the whole session'}) }}
+                        {{ form_row(form.featureTrack, {label: 'track: record the trajectory (pose stream)'}) }}
+                        {{ form_row(form.featureWitness, {label: 'witness: monitor the beacon zones'}) }}
+                        {{ form_row(form.featureIlluminator, {label: 'illuminator: generate traffic for the CSI receivers (inert without an access point)'}) }}
                     </div>
                 </div>
 
@@ -134,7 +130,7 @@
                 <div class="card mb-3">
                     <div class="card-header">Steps</div>
                     <div class="card-body">
-                        <div id="quest-steps-island" data-locked="{{ locked ? '1' : '0' }}">
+                        <div id="quest-steps-island" data-locked="0">
                             <noscript><p class="text-muted">The step editor needs JavaScript. The stored step list is posted back unchanged.</p></noscript>
                         </div>
                     </div>
@@ -143,7 +139,7 @@
                 {{ form_row(form.stepsJson) }}
                 <div class="quest-save">
                     <button type="submit" class="btn btn-primary">{{ quest ? 'Save' : 'Create quest' }}</button>
-                    <span class="text-muted small ms-2">{{ locked ? 'Header only.' : 'Header and steps; every step is re-validated on the server.' }}</span>
+                    <span class="text-muted small ms-2">Header and steps; every step is re-validated on the server, and a changed step list is the next revision.</span>
                 </div>
             </div>
         </div>

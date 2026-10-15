@@ -15,6 +15,9 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Entity(repositoryClass: QuestRepository::class)]
 #[ORM\Table(name: 'quests')]
 #[ORM\Index(name: 'quest_audience_idx', columns: ['audience'])]
+// One row per name (2026-10-15). A quest is edited in place and its history lives in
+// quest_revisions; a second row with the same name is a second quest in the app's list.
+#[ORM\UniqueConstraint(name: 'quest_name_unique', columns: ['name'])]
 #[ORM\HasLifecycleCallbacks]
 class Quest
 {
@@ -27,6 +30,15 @@ class Quest
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
     private ?Uuid $id = null;
+
+    /**
+     * The published step set this row currently serves (2026-10-15). 0 means no revision has
+     * been recorded yet; {@see \App\Quest\QuestRevisionWriter} publishes 1 on the first write
+     * and bumps it only when the steps actually change. Header fields (window, points,
+     * description) are not part of a revision: they do not change what a participant is asked.
+     */
+    #[ORM\Column(type: Types::INTEGER, options: ['default' => 0])]
+    private int $revision = 0;
 
     #[ORM\Column(length: 255)]
     #[Assert\NotBlank(message: 'Quest name is required')]
@@ -171,6 +183,38 @@ class Quest
     public function getId(): ?Uuid
     {
         return $this->id;
+    }
+
+    public function getRevision(): int
+    {
+        return $this->revision;
+    }
+
+    /** Only {@see \App\Quest\QuestRevisionWriter} calls this, in the same flush as the history row. */
+    public function setRevision(int $revision): static
+    {
+        $this->revision = $revision;
+
+        return $this;
+    }
+
+    /**
+     * The steps as a revision records them: `{order, name, type, config}` in declared order.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function stepSpec(): array
+    {
+        // Sorted here: the OrderBy mapping applies on load, not to steps added in this request.
+        $steps = $this->steps->toArray();
+        usort($steps, static fn (QuestStep $a, QuestStep $b): int => (int) $a->getOrder() <=> (int) $b->getOrder());
+
+        return array_values(array_map(static fn (QuestStep $s): array => [
+            'order' => (int) $s->getOrder(),
+            'name' => $s->getName(),
+            'type' => $s->getType()?->value,
+            'config' => $s->getConfig(),
+        ], $steps));
     }
 
     public function getName(): ?string

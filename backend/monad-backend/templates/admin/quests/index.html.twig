@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block main %}
-    <p class="ui-note">Manage availability and steps. Completed steps are locked; duplicate a quest to create a new revision.</p>
+    <p class="ui-note">One quest per name, edited in place. Saving a changed step list publishes the next revision; every run keeps the steps it was served.</p>
 
     <div class="card mb-3">
         <div class="table-responsive">
@@ -21,7 +21,7 @@
                         <th class="num">Points</th>
                         <th class="num">Steps</th>
                         <th class="num">Completions</th>
-                        <th>Lock</th>
+                        <th class="num">Revision</th>
                         <th data-no-sort>Actions</th>
                     </tr>
                 </thead>
@@ -39,13 +39,10 @@
                             <td class="num">{{ q.points|number_format(1) }}</td>
                             <td class="num">{{ q.steps|length }}</td>
                             <td class="num">{{ row.completions }}</td>
-                            <td>{% if row.locked %}<span class="state state-warn">locked</span>{% else %}<span class="state state-muted">open</span>{% endif %}</td>
+                            <td class="num">{{ row.revision }}</td>
                             <td class="actions"><div class="row-actions">
                                 <a href="{{ path('admin_lab_quests_edit', {id: q.id}) }}">Edit</a>
-                                <details class="row-details"><summary>More actions</summary><div class="row-actions"><form method="post" action="{{ path('admin_lab_quests_duplicate', {id: q.id}) }}" class="d-inline">
-                                    <input type="hidden" name="_token" value="{{ csrf_token(csrf) }}">
-                                    <button type="submit" class="btn btn-link btn-sm p-0 align-baseline">Duplicate</button>
-                                </form>
+                                <details class="row-details"><summary>More actions</summary><div class="row-actions">
                                 {% if row.status != 'hidden' %}
                                     <form method="post" action="{{ path('admin_lab_quests_hide', {id: q.id}) }}" class="d-inline" onsubmit="return confirm('Hide {{ q.name|e('js') }} now? It stops being offered; enrolments and completions stay.');">
                                         <input type="hidden" name="_token" value="{{ csrf_token(csrf) }}">
@@ -70,8 +67,8 @@
         <div class="card-body">
             <p class="text-muted small">
                 The exact <code>lab_quest_write</code> argument shape: <code>{name, description, available_from, steps: [{order, name, type, config}], available_to, estimated_duration, points, audience, route_pool}</code>.
-                Creates the quest, or replaces the one with the same name. Every step is validated against its type's schema before anything is written;
-                a quest with step completions is refused, the same rule the MCP tool follows.
+                Creates the quest, or replaces the one with the same name in place as its next revision, the same rule the MCP tool follows.
+                Every step is validated against its type's schema before anything is written; runs already started keep the steps they were served.
             </p>
             {% for error in import_errors %}
                 <div class="alert alert-danger">{{ error }}</div>

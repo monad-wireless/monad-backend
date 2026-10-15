@@ -6,9 +6,11 @@ use App\Dto\Quest\QuestCreateRequestDto;
 use App\Dto\Quest\QuestCreateStepDto;
 use App\Dto\Quest\QuestDetailResponseDto;
 use App\Entity\Quest;
+use App\Entity\QuestRevision;
 use App\Entity\QuestStep;
 use App\Entity\User;
 use App\Enum\QuestStepType;
+use App\Quest\QuestRevisionWriter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -162,7 +164,8 @@ class AdminController extends AbstractController
     public function createQuest(
         Request $request,
         EntityManagerInterface $entityManager,
-        ValidatorInterface $validator
+        ValidatorInterface $validator,
+        QuestRevisionWriter $revisions,
     ): JsonResponse {
         $user = $this->getUser();
         if (!$user instanceof User) {
@@ -215,6 +218,14 @@ class AdminController extends AbstractController
             ], Response::HTTP_BAD_REQUEST);
         }
 
+        // A quest name is unique and a quest is edited in place (2026-10-15). This route only
+        // creates, so a taken name is a conflict, never a second row the app would list.
+        if ($entityManager->getRepository(Quest::class)->findOneBy(['name' => $requestDto->name]) !== null) {
+            return $this->json([
+                'error' => sprintf('A quest named "%s" exists. Replace it in place with lab_quest_write; that publishes a new revision.', $requestDto->name),
+            ], Response::HTTP_CONFLICT);
+        }
+
         // Begin transaction
         $entityManager->beginTransaction();
         try {
@@ -235,18 +246,17 @@ class AdminController extends AbstractController
 
             $entityManager->persist($quest);
 
-            // Create quest steps
+            // Create quest steps, published as revision 1.
+            $steps = [];
             foreach ($requestDto->steps as $stepDto) {
                 $step = new QuestStep();
                 $step->setName($stepDto->name);
                 $step->setType(QuestStepType::from($stepDto->type));
                 $step->setOrder($stepDto->order);
                 $step->setConfig($stepDto->config);
-                $step->setQuest($quest);
-
-                $quest->addStep($step);
-                $entityManager->persist($step);
+                $steps[] = $step;
             }
+            $revisions->publish($quest, $steps, $user, QuestRevision::SOURCE_ADMIN);
 
             // Flush and commit
             $entityManager->flush();
