@@ -3,10 +3,12 @@
 namespace App\DataFixtures;
 
 use App\Entity\Quest;
+use App\Entity\QuestRevision;
 use App\Entity\QuestStep;
 use App\Entity\User;
 use App\Enum\QuestStepType;
 use App\Enum\UserRole;
+use App\Quest\QuestRevisionWriter;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Bundle\FixturesBundle\FixtureGroupInterface;
 use Doctrine\Common\DataFixtures\DependentFixtureInterface;
@@ -43,6 +45,7 @@ class ExperimentQuestFixtures extends Fixture implements DependentFixtureInterfa
 {
     public function __construct(
         private readonly UserPasswordHasherInterface $passwordHasher,
+        private readonly QuestRevisionWriter $revisions,
     ) {
     }
 
@@ -81,15 +84,20 @@ class ExperimentQuestFixtures extends Fixture implements DependentFixtureInterfa
         // still seeds in a single command.
         $author = $this->resolveAuthor($manager);
 
-        $manager->persist($this->coreSession($author));
-        $manager->persist($this->stillBlock($author));
-        $manager->persist($this->emptyRoomBlock($author));
-        $manager->persist($this->dryRun($author));
-        $manager->persist($this->roomScan($author));
-        $manager->persist($this->uwbSurvey($author));
-        $manager->persist($this->bleRecalibration($author));
-        $manager->persist($this->dualBand($author));
-        $manager->persist($this->walkAbba($author));
+        foreach ([
+            $this->coreSession($author),
+            $this->stillBlock($author),
+            $this->emptyRoomBlock($author),
+            $this->dryRun($author),
+            $this->roomScan($author),
+            $this->uwbSurvey($author),
+            $this->bleRecalibration($author),
+            $this->dualBand($author),
+            $this->walkAbba($author),
+        ] as $quest) {
+            $manager->persist($quest);
+            $this->revisions->recordCurrent($quest, $author, QuestRevision::SOURCE_FIXTURE);
+        }
         $manager->flush();
     }
 

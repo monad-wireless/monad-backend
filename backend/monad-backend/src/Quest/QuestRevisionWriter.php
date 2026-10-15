@@ -73,6 +73,26 @@ final class QuestRevisionWriter
     }
 
     /**
+     * Record the steps a quest was BUILT with as its revision 1. For a quest whose steps were
+     * attached directly (the dev fixtures); a no-op once any revision exists.
+     */
+    public function recordCurrent(Quest $quest, ?User $author, string $source): void
+    {
+        if ($quest->getRevision() > 0) {
+            return;
+        }
+        $quest->setRevision(1);
+        $this->entityManager->persist(new QuestRevision(
+            $quest,
+            1,
+            $quest->stepSpec(),
+            array_values($quest->getRequiredCapabilities()),
+            $source,
+            $author,
+        ));
+    }
+
+    /**
      * A step set as one comparable string: object keys sorted (key order is not content),
      * values compared exactly. Loose `==` would equate null with 0 and "5" with 5, and a
      * config edit that changes only a type would publish no revision.

@@ -239,7 +239,7 @@ final class QuestBuilderControllerTest extends KernelTestCase
         $html = (string) $response->getContent();
         self::assertStringContainsString('How many people?', $html);
         self::assertStringContainsString('id="preflight-server"', $html);
-        self::assertStringContainsString('data-locked="0"', $html);
+        self::assertStringContainsString('id="quest-steps-island"', $html);
     }
 
     public function testAnUnknownQuestIsFourOhFour(): void
@@ -260,7 +260,7 @@ final class QuestBuilderControllerTest extends KernelTestCase
 
         self::assertSame(Response::HTTP_OK, $response->getStatusCode());
         $html = (string) $response->getContent();
-        self::assertStringContainsString('data-locked="0"', $html);
+        self::assertStringNotContainsString('data-locked', $html, 'the island has no lock any more');
         self::assertStringContainsString('step completion(s)', $html);
         self::assertStringContainsString('publishes revision 1', $html);
         self::assertStringNotContainsString('Duplicate', $html);

@@ -67,7 +67,6 @@
 
     function Builder(root) {
         this.root = root;
-        this.locked = root.getAttribute('data-locked') === '1';
         this.steps = readJson('quest-steps', []) || [];
         this.schemas = readJson('step-schemas', []) || [];
         this.placements = readJson('placements', []) || [];
@@ -104,7 +103,7 @@
     Builder.prototype.render = function () {
         this.root.textContent = '';
         this.root.appendChild(this.renderList());
-        if (!this.locked) { this.root.appendChild(this.renderPalette()); }
+        this.root.appendChild(this.renderPalette());
         this.sync();
     };
 
@@ -125,27 +124,25 @@
                 class: 'step' + (this.violations[index] ? ' step-invalid' : ''),
                 // draggable is an ENUMERATED attribute, not a boolean one: it wants the literal
                 // "true", and `draggable="draggable"` is invalid and reads back as "auto".
-                draggable: this.locked ? null : 'true',
+                draggable: 'true',
                 'data-index': index
             });
 
-        if (!this.locked) {
-            item.addEventListener('dragstart', function (e) {
-                self.dragFrom = index;
-                item.classList.add('dragging');
-                e.dataTransfer.effectAllowed = 'move';
-                try { e.dataTransfer.setData('text/plain', String(index)); } catch (err) { /* Safari */ }
-            });
-            item.addEventListener('dragend', function () { item.classList.remove('dragging'); });
-            item.addEventListener('dragover', function (e) { e.preventDefault(); item.classList.add('drop-target'); });
-            item.addEventListener('dragleave', function () { item.classList.remove('drop-target'); });
-            item.addEventListener('drop', function (e) {
-                e.preventDefault();
-                item.classList.remove('drop-target');
-                if (self.dragFrom !== null && self.dragFrom !== index) { self.move(self.dragFrom, index); }
-                self.dragFrom = null;
-            });
-        }
+        item.addEventListener('dragstart', function (e) {
+            self.dragFrom = index;
+            item.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            try { e.dataTransfer.setData('text/plain', String(index)); } catch (err) { /* Safari */ }
+        });
+        item.addEventListener('dragend', function () { item.classList.remove('dragging'); });
+        item.addEventListener('dragover', function (e) { e.preventDefault(); item.classList.add('drop-target'); });
+        item.addEventListener('dragleave', function () { item.classList.remove('drop-target'); });
+        item.addEventListener('drop', function (e) {
+            e.preventDefault();
+            item.classList.remove('drop-target');
+            if (self.dragFrom !== null && self.dragFrom !== index) { self.move(self.dragFrom, index); }
+            self.dragFrom = null;
+        });
 
         item.appendChild(this.renderStepHead(step, index, schema));
         item.appendChild(this.renderStepBody(step, index, schema));
@@ -162,7 +159,7 @@
             head = el('div', { class: 'step-head' }),
             name = el('input', {
                 type: 'text', class: 'form-control step-name', value: step.name || '',
-                placeholder: 'Step name, shown on the phone', disabled: this.locked
+                placeholder: 'Step name, shown on the phone'
             });
 
         name.addEventListener('input', function () { step.name = name.value; self.sync(); });
@@ -171,22 +168,20 @@
         head.appendChild(el('span', { class: 'step-type', text: schema ? schema.palette.title : step.type, title: step.type }));
         head.appendChild(name);
 
-        if (!this.locked) {
-            head.appendChild(this.button('↑', 'Move up', index === 0, function () { self.move(index, index - 1); }));
-            head.appendChild(this.button('↓', 'Move down', index === this.steps.length - 1, function () { self.move(index, index + 1); }));
-            head.appendChild(this.button('Advanced', 'Edit this step’s config as raw JSON', false, function () {
-                self.open[index] = !self.open[index];
+        head.appendChild(this.button('↑', 'Move up', index === 0, function () { self.move(index, index - 1); }));
+        head.appendChild(this.button('↓', 'Move down', index === this.steps.length - 1, function () { self.move(index, index + 1); }));
+        head.appendChild(this.button('Advanced', 'Edit this step’s config as raw JSON', false, function () {
+            self.open[index] = !self.open[index];
+            self.render();
+        }));
+        head.appendChild(this.button('Delete', 'Remove this step', false, function () {
+            if (window.confirm('Delete step ' + index + ' (' + (step.name || step.type) + ')? The step list is only written when you save.')) {
+                self.steps.splice(index, 1);
+                self.open = {};
+                self.picker = {};
                 self.render();
-            }));
-            head.appendChild(this.button('Delete', 'Remove this step', false, function () {
-                if (window.confirm('Delete step ' + index + ' (' + (step.name || step.type) + ')? The step list is only written when you save.')) {
-                    self.steps.splice(index, 1);
-                    self.open = {};
-                    self.picker = {};
-                    self.render();
-                }
-            }, 'danger'));
-        }
+            }
+        }, 'danger'));
 
         return head;
     };
@@ -254,7 +249,7 @@
             multiline = field.name === 'description',
             input = el(multiline ? 'textarea' : 'input', {
                 class: 'form-control', type: multiline ? false : 'text',
-                rows: multiline ? 2 : false, disabled: this.locked
+                rows: multiline ? 2 : false
             });
         input.value = getPath(step.config, field.name) === undefined ? '' : String(getPath(step.config, field.name));
         input.addEventListener('input', function () {
@@ -267,7 +262,7 @@
     Builder.prototype.numberControl = function (step, field) {
         var self = this,
             input = el('input', {
-                class: 'form-control', type: 'number', disabled: this.locked,
+                class: 'form-control', type: 'number',
                 step: field.kind === 'int' ? '1' : 'any',
                 min: field.min === null ? false : String(field.min),
                 max: field.max === null ? false : String(field.max)
@@ -289,7 +284,7 @@
     Builder.prototype.boolControl = function (step, field) {
         var self = this,
             wrap = el('div', { class: 'form-check' }),
-            input = el('input', { class: 'form-check-input', type: 'checkbox', disabled: this.locked });
+            input = el('input', { class: 'form-check-input', type: 'checkbox' });
         input.checked = getPath(step.config, field.name) === true;
         input.addEventListener('change', function () { setPath(step.config, field.name, input.checked); self.sync(); });
         wrap.appendChild(input);
@@ -298,7 +293,7 @@
 
     Builder.prototype.enumControl = function (step, field) {
         var self = this,
-            select = el('select', { class: 'form-select', disabled: this.locked }),
+            select = el('select', { class: 'form-select' }),
             current = getPath(step.config, field.name);
         if (!field.required) { select.appendChild(el('option', { value: '', text: '—' })); }
         (field.choices || []).forEach(function (choice) {
@@ -314,7 +309,7 @@
 
     Builder.prototype.listControl = function (step, field) {
         var self = this,
-            area = el('textarea', { class: 'form-control font-monospace', rows: 3, disabled: this.locked }),
+            area = el('textarea', { class: 'form-control font-monospace', rows: 3 }),
             current = getPath(step.config, field.name);
         area.value = Array.isArray(current) ? current.join('\n') : '';
         area.placeholder = 'One entry per line';
@@ -335,7 +330,7 @@
     Builder.prototype.locationControl = function (step, field) {
         var self = this,
             listId = 'places-' + Math.random().toString(36).slice(2),
-            input = el('input', { class: 'form-control', type: 'text', list: listId, disabled: this.locked }),
+            input = el('input', { class: 'form-control', type: 'text', list: listId }),
             datalist = el('datalist', { id: listId }),
             wrap = el('div', {}),
             seen = {};
@@ -382,13 +377,11 @@
             wrap.appendChild(self.renderTarget(step, field, targets, target, t));
         });
 
-        if (!this.locked) {
-            wrap.appendChild(this.button(this.picker[index] ? 'Close picker' : 'Add targets', 'Pick surveyed points', false, function () {
-                self.picker[index] = !self.picker[index];
-                self.render();
-            }));
-            if (this.picker[index]) { wrap.appendChild(this.renderPicker(step, field, targets)); }
-        }
+        wrap.appendChild(this.button(this.picker[index] ? 'Close picker' : 'Add targets', 'Pick surveyed points', false, function () {
+            self.picker[index] = !self.picker[index];
+            self.render();
+        }));
+        if (this.picker[index]) { wrap.appendChild(this.renderPicker(step, field, targets)); }
 
         return wrap;
     };
@@ -396,8 +389,8 @@
     Builder.prototype.renderTarget = function (step, field, targets, target, t) {
         var self = this,
             row = el('div', { class: 'target' }),
-            label = el('input', { class: 'form-control target-label', type: 'text', value: target.label || '', disabled: this.locked }),
-            kind = el('select', { class: 'form-select target-kind', disabled: this.locked });
+            label = el('input', { class: 'form-control target-label', type: 'text', value: target.label || '' }),
+            kind = el('select', { class: 'form-select target-kind' });
 
         row.appendChild(el('code', { class: 'target-value', text: String(target.value || '') }));
         label.addEventListener('input', function () { target.label = label.value; self.sync(); });
@@ -410,12 +403,10 @@
         kind.addEventListener('change', function () { target.kind = kind.value; self.sync(); });
         row.appendChild(kind);
 
-        if (!this.locked) {
-            row.appendChild(this.button('✕', 'Remove this target', false, function () {
-                targets.splice(t, 1);
-                self.render();
-            }, 'danger'));
-        }
+        row.appendChild(this.button('✕', 'Remove this target', false, function () {
+            targets.splice(t, 1);
+            self.render();
+        }, 'danger'));
         return row;
     };
 
@@ -495,7 +486,7 @@
     Builder.prototype.renderAdvanced = function (step, index) {
         var self = this,
             wrap = el('div', { class: 'advanced' }),
-            area = el('textarea', { class: 'form-control font-monospace', rows: 8, disabled: this.locked }),
+            area = el('textarea', { class: 'form-control font-monospace', rows: 8 }),
             note = el('p', { class: 'field-help', text: 'The whole config. Saved only while it parses.' });
 
         area.value = JSON.stringify(step.config, null, 2);

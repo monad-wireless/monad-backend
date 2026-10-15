@@ -246,6 +246,25 @@ final class QuestWriteOverRunsTest extends KernelTestCase
         self::assertCount(1, $this->em->getRepository(Quest::class)->findBy(['name' => $name]), 'one row per name');
     }
 
+    public function testARevisionWrittenBySqlWithMicrosecondsStillReads(): void
+    {
+        // The migration backfill wrote created_at with now(), microseconds included, and every
+        // such row failed to hydrate in production. The column now stores whole seconds.
+        $quest = $this->questWithARun('backfilled');
+        $this->em->getConnection()->executeStatement(
+            "INSERT INTO quest_revisions (id, quest_id, revision, steps, required_capabilities, source, author_id, created_at) "
+            . "VALUES (gen_random_uuid(), :q, 1, '[]'::jsonb, '[]'::jsonb, 'migration', NULL, now())",
+            ['q' => (string) $quest->getId()],
+        );
+        $this->em->getConnection()->executeStatement('UPDATE quests SET revision = 1 WHERE id = :q', ['q' => (string) $quest->getId()]);
+        $this->em->clear();
+
+        $history = $this->tools->questRevisions((string) $quest->getName(), include_steps: false);
+
+        self::assertSame([1], array_column($history['revisions'], 'revision'));
+        self::assertSame('migration', $history['revisions'][0]['source']);
+    }
+
     public function testOmittingAvailableFromOnAReplaceKeepsTheLiveWindow(): void
     {
         $quest = $this->questWithARun('window');

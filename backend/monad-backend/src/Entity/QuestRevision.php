@@ -28,6 +28,7 @@ class QuestRevision
     public const SOURCE_ADMIN = 'admin';
     public const SOURCE_IMPORT = 'import';
     public const SOURCE_MIGRATION = 'migration';
+    public const SOURCE_FIXTURE = 'fixture';
 
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
