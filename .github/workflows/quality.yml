@@ -9,7 +9,7 @@ on:
 jobs:
   static:
     name: Lint and validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
 
@@ -60,7 +60,7 @@ jobs:
 
   tests:
     name: Unit and integration tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     services:
       postgres:
         image: postgres:16-alpine
@@ -117,7 +117,7 @@ jobs:
 
   smoke:
     name: Container smoke test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     services:
       postgres:
         image: postgres:16-alpine
