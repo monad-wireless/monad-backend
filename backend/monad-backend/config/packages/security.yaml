@@ -28,9 +28,44 @@ security:
             pattern: ^/api
             stateless: true
             jwt: ~
+        # The MCP authoring surface. HTTP Basic rather than JWT: an MCP client configures a
+        # username and a password once, and there is no token to refresh mid-session. Stateless,
+        # because each JSON-RPC call stands alone.
+        mcp:
+            pattern: ^/mcp
+            stateless: true
+            http_basic:
+                realm: 'MonadCount lab'
+
         dev:
             pattern: ^/(_(profiler|wdt)|css|images|js)/
             security: false
+
+        # The management interface. Stateful on purpose, unlike everything above it: the API is
+        # JWT-bearer because phones hold their own token, but a browser session is what a human
+        # operator has, and storing a JWT in localStorage to fake one would be a downgrade.
+        # Session cookies also mean the logout below actually ends the session server-side.
+        #
+        # Reachability is narrowed a second time outside the application: nginx serves /admin only
+        # to the Headscale tailnet (roles/monad_api). Login is the authentication; the tailnet is
+        # the reason a credential-stuffing bot never reaches the login at all.
+        admin:
+            pattern: ^/admin
+            lazy: true
+            provider: app_user_provider
+            form_login:
+                login_path: admin_login
+                check_path: admin_login
+                default_target_path: admin
+                enable_csrf: true
+            logout:
+                path: admin_logout
+                target: admin_login
+
+        # Everything else, including /join (IP-157): a public HTML form proxied from the site's
+        # nginx vhost. Not pattern-scoped, so /join needs no pattern change here; it is a
+        # PUBLIC_ACCESS line in access_control below, and its protection is the honeypot field and
+        # the rate limiter in JoinController, not a login.
         main:
             lazy: true
             provider: app_user_provider
@@ -48,13 +83,61 @@ security:
     # Easy way to control access for large sections of your site
     # Note: Only the *first* access control that matches will be used
     access_control:
+        # The login form itself must be reachable by someone not yet logged in; everything else
+        # under /admin is superadmin-only. ROLE_USER is every registered participant, so the
+        # management interface would otherwise be open to anyone who signed up in the app.
+        - { path: ^/admin/login, roles: PUBLIC_ACCESS }
+        - { path: ^/admin, roles: ROLE_SUPERADMIN }
+
+        # Authoring lab content is an administrative act, so it takes the same role the panel
+        # does. Like /admin, nginx serves this on the tailnet only.
+        - { path: ^/mcp, roles: ROLE_SUPERADMIN }
+
+        # Liveness must not require a token: the container HEALTHCHECK, the host nginx upstream
+        # probe and any uptime monitor all call it unauthenticated, and a 401 reads as "down".
+        - { path: ^/api/health, roles: PUBLIC_ACCESS }
         - { path: ^/api/doc, roles: PUBLIC_ACCESS }
         - { path: ^/api/auth/register, roles: PUBLIC_ACCESS }
         - { path: ^/api/auth/login, roles: PUBLIC_ACCESS }
         - { path: ^/api/quests$, roles: PUBLIC_ACCESS }
         - { path: ^/api/quest/[^/]+$, roles: PUBLIC_ACCESS }
+        # IP-128 — the QR device landing. Anchored `$` is load-bearing: any future
+        # /api/device/{slug}/... write route must stay IS_AUTHENTICATED_FULLY by
+        # default rather than inheriting this public hole.
+        - { path: ^/api/device/[^/]+$, roles: PUBLIC_ACCESS }
+        # IP-129 — the marker landing page reads this to say whether the card someone
+        # is holding is in use. Anchored for the same reason: `/api/lab/*` is otherwise
+        # authenticated (it carries AP credentials and accepts ground-truth writes), and
+        # only this one read is public.
+        - { path: ^/api/lab/marker-index$, roles: PUBLIC_ACCESS }
+        # IP-129 §4.2 — the arming matrix behind the portal's read-only ops view. Public for the
+        # same narrow reason and anchored the same way. It publishes experimental design and no
+        # answer key: the projection carries no steps at all, so `expected_value` cannot ride
+        # along (ArmingMatrixResponseDto).
+        - { path: ^/api/lab/arming-matrix$, roles: PUBLIC_ACCESS }
+        # The fleet's public vital signs, which exist so the website never needs a
+        # route into the observability stack. Anchored like its neighbours. It
+        # carries no credential and no identifier — a closed allow-list of PromQL
+        # decided in FleetMetricsReader, of which only the `host` label survives —
+        # and the site holds no JWT, so requiring one would mean handing a public
+        # cookie-less website a credential to store. nginx additionally 404s this
+        # path on the Internet-facing vhost; the site calls it over loopback.
+        - { path: ^/api/lab/fleet$, roles: PUBLIC_ACCESS }
+        # The same fleet as six hours of curves. Anchored separately rather than
+        # loosening the line above to `^/api/lab/fleet`, so that a future
+        # /api/lab/fleet/<anything> route does not inherit a public hole it was
+        # never reviewed for.
+        - { path: ^/api/lab/fleet/history$, roles: PUBLIC_ACCESS }
         - { path: ^/api/admin, roles: ROLE_SUPERADMIN }
+        # IP-157 — the per-user notification surface (`/api/me/notifications*`,
+        # `/api/me/push-token`, `/api/me/notification-preferences`) needs no line of its own:
+        # it falls under this catch-all, IS_AUTHENTICATED_FULLY on the jwt firewall, and every
+        # handler reads getUser() and nothing else.
         - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
+        # IP-157 — the beta signup form, GET and POST, reached as monad.dubec.dev/join through
+        # the site's nginx. Anchored so a future /join/<admin-ish> path does not inherit it;
+        # the confirmation page is the POST response, not a sub-path.
+        - { path: ^/join$, roles: PUBLIC_ACCESS }
 
 when@test:
     security:

@@ -1,0 +1,1006 @@
+/*
+ * The management interface, on the public site's visual system (IP-157 Phase 8).
+ *
+ * ONE SYSTEM. The site's tokens (monad_knowledge/web/theme.py) are the source: paper, ink,
+ * signal cyan for "this is a measurement", stale ochre, fault brick, radius 0. Tables over
+ * cards, borders over shadows, dense rows, sticky headers, row-click opens the record.
+ * Three semantic hues and no more; every other state is carried by FORM — muted, hollow,
+ * struck — because colour alone cannot carry five states.
+ *
+ * FONTS ARE VENDORED, not fetched. `/admin` is served over public HTTPS now, and a request
+ * to a font host would hand that host every operator's address and page load. The woff2 files
+ * under public/fonts/ are copies of the subsets the public site already ships; the licence is
+ * public/fonts/OFL-NOTICE.txt. Latin and latin-ext only: that is what this interface's copy
+ * uses. Literata carries the wordmark and nothing else, exactly as on the site.
+ *
+ * Loaded through DashboardController::configureAssets() AFTER EasyAdmin's app.css, so every
+ * rule below wins by order rather than by !important. The shell itself is ours
+ * (templates/bundles/EasyAdminBundle/layout.html.twig): EasyAdmin's sidebar, top bar and
+ * `⋯` dropdowns are gone. What remains of the vendor theme is the CRUD form widgets, the
+ * confirmation modal and the filter panel, and the reconciliation section at the bottom of
+ * this file is what makes those look like the rest.
+ *
+ * Per-lane rules live in admin-*.css, not here.
+ */
+
+/* ── Type ─────────────────────────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 700;
+  src: url('/fonts/ibm-plex-sans-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 700;
+  src: url('/fonts/ibm-plex-sans-latin-ext-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('/fonts/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('/fonts/ibm-plex-mono-latin-ext-400-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('/fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('/fonts/ibm-plex-mono-latin-ext-500-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Literata';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url('/fonts/literata-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Literata';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url('/fonts/literata-latin-ext-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ── Tokens ───────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --paper: #FBFBF9;
+  --paper-sunk: #F3F2EE;
+  --surface: #FFFFFF;
+
+  --ink: #231F20;
+  --ink-70: #57534F;
+  --ink-45: #69645F;
+  --ink-25: #B8B3AC;
+  /* The hairline, derived from ink at 12 % over paper. */
+  --rule: #E1DFDA;
+  --rule-strong: #C7C2B9;
+
+  --signal: #0096C9;
+  --signal-ink: #00688C;
+  --signal-wash: #E6F4FA;
+  --signal-line: rgba(0, 150, 201, 0.30);
+
+  --stale: #A96A00;
+  --stale-wash: #FBF1E0;
+  --fault: #A83A2C;
+  --fault-wash: #FAECEA;
+
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-display: 'Literata', 'Iowan Old Style', Georgia, serif;
+
+  --rail-w: 232px;
+  --content-w: 1680px;
+
+  --s1: 0.25rem;
+  --s2: 0.5rem;
+  --s3: 0.75rem;
+  --s4: 1rem;
+  --s5: 1.5rem;
+  --s6: 2rem;
+
+  /* Radius 0 everywhere Bootstrap or EasyAdmin reads one. */
+  --bs-border-radius: 0;
+  --bs-border-radius-sm: 0;
+  --bs-border-radius-lg: 0;
+  --bs-border-radius-xl: 0;
+  --bs-border-radius-pill: 0;
+  --border-radius: 0;
+  --border-radius-sm: 0;
+  --border-radius-lg: 0;
+
+  /* EasyAdmin theme variables, re-pointed at the tokens above. */
+  --font-family-base: var(--font-sans);
+  --font-family-monospace: var(--font-mono);
+  --body-bg: var(--paper);
+  --content-bg: var(--paper);
+  --content-panel-bg: var(--surface);
+  --text-color: var(--ink);
+  --text-muted: var(--ink-45);
+  --text-secondary-color: var(--ink-70);
+  --text-tertiary-color: var(--ink-45);
+  --link-color: var(--signal-ink);
+  --link-hover-color: var(--signal);
+  --color-primary: var(--signal);
+  --button-primary-bg: var(--signal-ink);
+  --button-primary-border-color: var(--signal-ink);
+  --button-primary-color: #fff;
+  --button-secondary-bg: var(--surface);
+  --border-color: var(--rule);
+  --form-input-border-color: var(--rule-strong);
+  --form-control-bg: var(--surface);
+  --table-cell-border-color: var(--rule);
+  --table-thead-color: var(--ink-45);
+  --table-thead-marker-color: var(--signal);
+  --table-hover-cell-bg: var(--signal-wash);
+  --highlight-bg: var(--paper-sunk);
+  --dropdown-bg: var(--surface);
+  --dropdown-border-color: var(--rule);
+  --dropdown-link-color: var(--ink);
+  --dropdown-link-hover-bg: var(--paper-sunk);
+  --datalist-label-color: var(--ink-45);
+  --datalist-value-color: var(--ink);
+
+  --bs-primary: var(--signal);
+  --bs-link-color: var(--signal-ink);
+  --bs-link-hover-color: var(--signal);
+  --bs-success: var(--signal-ink);
+  --bs-info: var(--signal);
+  --bs-warning: var(--stale);
+  --bs-danger: var(--fault);
+  --bs-body-color: var(--ink);
+  --bs-body-bg: var(--paper);
+  --bs-border-color: var(--rule);
+  --bs-font-sans-serif: var(--font-sans);
+  --bs-body-font-family: var(--font-sans);
+}
+
+/* ── Ground ───────────────────────────────────────────────────────────────────────────── */
+
+html { -webkit-text-size-adjust: 100%; }
+
+body,
+body.ea {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+a { color: var(--signal-ink); text-decoration: none; }
+a:hover { color: var(--signal); text-decoration: underline; }
+
+code, .mono, pre { font-family: var(--font-mono); }
+
+h1, h2, h3, h4 { font-family: var(--font-sans); font-weight: 600; color: var(--ink); }
+
+/* ── The shell ────────────────────────────────────────────────────────────────────────── */
+
+.mc-shell {
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.mc-rail {
+  background: var(--paper-sunk);
+  border-right: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.mc-wordmark {
+  display: block;
+  padding: var(--s5) var(--s4) var(--s4);
+  color: var(--ink);
+  text-decoration: none;
+}
+.mc-wordmark:hover { color: var(--ink); text-decoration: none; }
+.mc-wordmark b {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.3125rem;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.mc-wordmark small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-45);
+}
+
+/* The one ornament: the tone row, a line of dots with the nulled centre bin as its gap. */
+.mc-tone { display: flex; gap: 7px; margin-top: 10px; height: 6px; }
+.mc-tone i {
+  flex: 1;
+  background-image: radial-gradient(circle at 1.15px 50%, var(--signal) 1.15px, transparent 1.2px);
+  background-size: 7px 6px;
+  background-repeat: repeat-x;
+  opacity: 0.85;
+}
+
+.mc-nav { display: flex; flex-direction: column; padding-bottom: var(--s4); }
+.mc-nav a {
+  display: block;
+  padding: 0.75rem var(--s4);
+  color: var(--ink-70);
+  border-left: 3px solid transparent;
+  font-size: 0.9375rem;
+  text-decoration: none;
+}
+.mc-nav a:hover { background: rgba(0, 0, 0, 0.03); color: var(--ink); text-decoration: none; }
+.mc-nav a.is-active {
+  background: var(--paper);
+  border-left-color: var(--signal);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.mc-rail-foot {
+  margin-top: auto;
+  padding: var(--s4);
+  border-top: 1px solid var(--rule);
+  font-size: 0.75rem;
+  color: var(--ink-45);
+}
+.mc-rail-foot code { font-size: 0.72rem; }
+
+.mc-main { display: flex; flex-direction: column; min-width: 0; }
+
+.mc-top {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s4);
+  padding: var(--s4) var(--s5);
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+.mc-top-title { min-width: 0; flex: 1; }
+.mc-crumb {
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-45);
+  margin-bottom: 2px;
+  min-height: 1rem;
+}
+.mc-crumb a { color: var(--ink-45); }
+.mc-crumb a:hover { color: var(--signal-ink); }
+.mc-top h1 {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.mc-top-right { display: flex; align-items: center; gap: var(--s3); flex-shrink: 0; }
+.mc-top .page-actions,
+.mc-top-actions { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+
+/* The user menu: a details element, so it needs no script. */
+.mc-user { position: relative; }
+.mc-user > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  font-size: 0.8125rem;
+  color: var(--ink-70);
+  white-space: nowrap;
+}
+.mc-user > summary::-webkit-details-marker { display: none; }
+.mc-user[open] > summary { border-color: var(--rule-strong); color: var(--ink); }
+.mc-user-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 15rem;
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  z-index: 60;
+  padding: var(--s2) 0;
+}
+.mc-user-menu .who {
+  padding: var(--s2) var(--s3) var(--s3);
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.8125rem;
+}
+.mc-user-menu .who b { display: block; font-weight: 600; }
+.mc-user-menu .who span { color: var(--ink-45); font-family: var(--font-mono); font-size: 0.75rem; }
+.mc-user-menu a,
+.mc-user-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.4rem var(--s3);
+  font-size: 0.875rem;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+.mc-user-menu a:hover, .mc-user-menu button:hover { background: var(--paper-sunk); text-decoration: none; }
+
+.mc-flash { padding: 0 var(--s5); }
+.mc-flash:empty { padding: 0; }
+
+.mc-content {
+  flex: 1;
+  width: 100%;
+  max-width: var(--content-w);
+  padding: var(--s5);
+  box-sizing: border-box;
+}
+
+/* ── Page furniture ───────────────────────────────────────────────────────────────────── */
+
+.ui-section { margin-bottom: var(--s5); }
+.ui-section > h2 {
+  margin: 0 0 var(--s2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-45);
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: var(--s1);
+}
+.ui-section > h2 .more { float: right; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.ui-note { font-size: 0.8125rem; color: var(--ink-45); margin: var(--s2) 0 0; max-width: 72ch; }
+.ui-prose { max-width: 72ch; }
+.ui-prose p { margin: 0 0 var(--s3); }
+
+.ui-head { margin: 0 0 var(--s4); }
+.ui-head h2 { margin: 0; font-size: 1.125rem; font-weight: 600; }
+.ui-head .sub { color: var(--ink-45); font-size: 0.875rem; margin-top: 2px; }
+
+/* Tabs: a rule with the active tab sitting on it. */
+.ui-tabs {
+  display: flex;
+  gap: var(--s4);
+  border-bottom: 1px solid var(--rule);
+  margin: 0 0 var(--s4);
+  overflow-x: auto;
+}
+.ui-tabs a {
+  padding: var(--s2) 0 0.55rem;
+  color: var(--ink-70);
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  font-size: 0.9375rem;
+}
+.ui-tabs a:hover { color: var(--ink); text-decoration: none; border-bottom-color: var(--ink-25); }
+.ui-tabs a.is-active { color: var(--ink); font-weight: 600; border-bottom-color: var(--signal); }
+.ui-tabs a .n {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-45);
+  margin-left: 0.35rem;
+}
+
+/* One-line fact strip. */
+.strip {
+  display: flex;
+  gap: var(--s5);
+  flex-wrap: wrap;
+  padding: var(--s2) 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  margin: 0 0 var(--s4);
+  font-size: 0.875rem;
+}
+.strip .k {
+  color: var(--ink-45);
+  text-transform: uppercase;
+  font-size: 0.6875rem;
+  letter-spacing: 0.05em;
+  margin-right: 0.35rem;
+}
+
+/* The attention list: one dense list, the hue carried by a left bar. */
+.attention { border: 1px solid var(--rule); background: var(--surface); }
+.attention a.attention-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  padding: 0.5rem var(--s3);
+  border-bottom: 1px solid var(--rule);
+  border-left: 3px solid var(--ink-25);
+  color: var(--ink);
+}
+.attention a.attention-item:last-child { border-bottom: 0; }
+.attention a.attention-item:hover { background: var(--paper-sunk); text-decoration: none; }
+.attention a.attention-item .n {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  min-width: 2.5rem;
+  text-align: right;
+}
+.attention a.attention-item .what { flex: 1; }
+.attention a.attention-item.state-ok { border-left-color: var(--signal); }
+.attention a.attention-item.state-warn { border-left-color: var(--stale); }
+.attention a.attention-item.state-bad { border-left-color: var(--fault); }
+.attention a.attention-item.state-ok .n { color: var(--signal-ink); }
+.attention a.attention-item.state-warn .n { color: var(--stale); }
+.attention a.attention-item.state-bad .n { color: var(--fault); }
+.attention .clear {
+  padding: 0.6rem var(--s3);
+  color: var(--ink-45);
+  font-size: 0.9375rem;
+}
+
+/* State words. Never a pill, never a raw enum. */
+.state {
+  font-weight: 600;
+  text-transform: lowercase;
+  font-size: 0.8125rem;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.state-ok { color: var(--signal-ink); }
+.state-warn { color: var(--stale); }
+.state-bad { color: var(--fault); }
+.state-muted { color: var(--ink-45); }
+
+/* Identity: the name, the address beneath it, always in that order. */
+.identity { line-height: 1.25; }
+.identity b { font-weight: 500; display: block; }
+.identity span { display: block; font-size: 0.78rem; color: var(--ink-45); }
+.identity .pseudonym { font-family: var(--font-mono); font-size: 0.78rem; color: var(--ink-45); }
+
+.short-id { font-family: var(--font-mono); font-size: 0.8125rem; color: var(--ink-70); cursor: help; }
+
+.ui-empty { color: var(--ink-45); font-size: 0.875rem; padding: var(--s3) 0; }
+
+/* ── Tables ───────────────────────────────────────────────────────────────────────────── */
+
+.ui-table-wrap { overflow-x: auto; border: 1px solid var(--rule); background: var(--surface); }
+
+table.ui-table,
+.table-dense {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  background: var(--surface);
+}
+table.ui-table th, table.ui-table td,
+.table-dense th, .table-dense td {
+  padding: 0.75rem 0.85rem;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--rule);
+}
+table.ui-table thead th,
+.table-dense thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--paper-sunk);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-70);
+  border-bottom: 1px solid var(--rule-strong);
+}
+table.ui-table tbody tr:last-child td,
+.table-dense tbody tr:last-child td { border-bottom: 0; }
+table.ui-table td.wrap, table.ui-table th.wrap,
+.table-dense td.wrap, .table-dense th.wrap { white-space: normal; }
+table.ui-table td.num, table.ui-table th.num,
+.table-dense td.num, .table-dense th.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.ui-table code, .table-dense code, .mono {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+table.ui-table tbody tr.clickable:hover,
+.table-dense tbody tr.clickable:hover { background: var(--signal-wash); cursor: pointer; }
+
+/* Two-column fact table. */
+.table-facts th { width: 16rem; font-weight: 500; color: var(--ink-45); text-transform: none;
+  font-size: 0.8125rem; letter-spacing: 0; background: transparent; position: static; }
+
+/* ── Buttons ──────────────────────────────────────────────────────────────────────────── */
+
+.ui-btn,
+.ea .btn {
+  display: inline-block;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--rule-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  border-radius: 0;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ui-btn:hover, .ea .btn:hover { background: var(--paper-sunk); color: var(--ink); text-decoration: none; }
+.ui-btn-primary, .ea .btn-primary {
+  background: var(--signal-ink);
+  border-color: var(--signal-ink);
+  color: #fff;
+}
+.ui-btn-primary:hover, .ea .btn-primary:hover { background: var(--signal); border-color: var(--signal); color: #fff; }
+.ui-btn-danger, .ea .btn-danger {
+  background: var(--surface);
+  border-color: var(--fault);
+  color: var(--fault);
+}
+.ui-btn-danger:hover, .ea .btn-danger:hover { background: var(--fault-wash); color: var(--fault); }
+form.ui-inline { display: inline; }
+
+/* ── Flash ────────────────────────────────────────────────────────────────────────────── */
+
+.ea .alert, .ui-flash {
+  background: var(--paper-sunk);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-left-width: 3px;
+  border-radius: 0;
+  padding: var(--s2) var(--s3);
+  margin: var(--s4) 0 0;
+  font-size: 0.875rem;
+}
+.ea .alert-warning, .ui-flash-warning { border-left-color: var(--stale); background: var(--stale-wash); }
+.ea .alert-danger, .ui-flash-danger { border-left-color: var(--fault); background: var(--fault-wash); }
+.ea .alert-success, .ea .alert-info,
+.ui-flash-success, .ui-flash-info { border-left-color: var(--signal); background: var(--signal-wash); }
+
+/* ── The login page ───────────────────────────────────────────────────────────────────── */
+
+.mc-login { min-height: 100vh; display: grid; place-items: center; padding: var(--s5); background: var(--paper-sunk); }
+.mc-login-card { width: 100%; max-width: 22rem; background: var(--paper); border: 1px solid var(--rule); padding: var(--s6) var(--s5); }
+.mc-login-card .mc-wordmark { padding: 0 0 var(--s4); }
+.mc-login-card p.lede { color: var(--ink-70); font-size: 0.875rem; margin: 0 0 var(--s5); }
+.mc-login-card label { display: block; font-size: 0.75rem; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--ink-45); margin-bottom: var(--s1); }
+.mc-login-card input[type=text], .mc-login-card input[type=password] {
+  width: 100%; box-sizing: border-box; padding: 0.45rem 0.6rem; border: 1px solid var(--rule-strong);
+  background: var(--surface); font-family: inherit; font-size: 0.9375rem; color: var(--ink); border-radius: 0;
+}
+.mc-login-card input:focus { outline: 2px solid var(--signal); outline-offset: -1px; border-color: var(--signal); }
+.mc-login-card .field { margin-bottom: var(--s4); }
+.mc-login-card button { width: 100%; padding: 0.5rem; font-size: 0.9375rem; }
+.mc-login-error { border: 1px solid var(--fault); border-left-width: 3px; background: var(--fault-wash);
+  padding: var(--s2) var(--s3); font-size: 0.875rem; margin-bottom: var(--s4); color: var(--ink); }
+
+/* ── EasyAdmin CRUD reconciliation ────────────────────────────────────────────────────── */
+/* What survives of the vendor theme: form widgets, the confirmation modal, the filter
+   panel, the paginator. These rules make them read as the same interface. */
+
+.ea .content-panel,
+.ea .content-panel-footer { background: var(--surface); border-color: var(--rule); border-radius: 0; box-shadow: none; }
+
+.ea table.datagrid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+}
+.ea table.datagrid th,
+.ea table.datagrid td {
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  white-space: nowrap;
+}
+.ea table.datagrid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--paper-sunk);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-70);
+  border-bottom: 1px solid var(--rule-strong);
+}
+.ea table.datagrid thead th a { color: var(--ink-45); }
+.ea table.datagrid thead th.sorted a { color: var(--signal-ink); }
+.ea table.datagrid tbody tr[role=link] { cursor: pointer; }
+.ea table.datagrid tbody tr:hover { background: var(--signal-wash); }
+.ea table.datagrid td.actions { text-align: right; }
+.ea table.datagrid td.actions a,
+.ea table.datagrid td.actions button {
+  font-size: 0.8125rem;
+  margin-left: 0.6rem;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--signal-ink);
+  cursor: pointer;
+  font-family: inherit;
+}
+.ea table.datagrid td.actions a:hover { text-decoration: underline; }
+.ea table.datagrid td.actions .action-icon,
+.ea table.datagrid td.actions svg { display: none; }
+.ea table.datagrid td.actions .action-delete,
+.ea table.datagrid td.actions .action-anonymise { color: var(--fault); }
+/* The skeleton rows EasyAdmin draws behind "no results" are a shimmer we do not want. */
+.ea table.datagrid tr.empty-row { display: none; }
+.ea table.datagrid tr.no-results td { color: var(--ink-45); padding: var(--s4) 0.6rem; }
+
+/* Badges become words. Three hues, everything else muted. */
+.ea .badge {
+  display: inline;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none !important;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: lowercase;
+  letter-spacing: 0.01em;
+  color: var(--ink-45) !important;
+}
+.ea .badge-boolean-true, .ea .badge.bg-success, .ea .badge-success { color: var(--signal-ink) !important; }
+.ea .badge.bg-warning, .ea .badge-warning { color: var(--stale) !important; }
+.ea .badge.bg-danger, .ea .badge-danger { color: var(--fault) !important; }
+.ea .badge-outline, .ea .badge-secondary, .ea .badge-boolean-false { color: var(--ink-45) !important; }
+
+.ea .form-control, .ea .form-select, .ea select, .ea input[type=text], .ea input[type=email],
+.ea input[type=password], .ea input[type=number], .ea input[type=datetime-local], .ea textarea {
+  border-radius: 0;
+  border-color: var(--rule-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+}
+.ea .form-control:focus, .ea .form-select:focus, .ea textarea:focus {
+  border-color: var(--signal);
+  box-shadow: none;
+  outline: 2px solid var(--signal-line);
+  outline-offset: -1px;
+}
+.ea .form-label, .ea .form-control-label { color: var(--ink-70); font-size: 0.8125rem; }
+.ea .form-help, .ea .form-text { color: var(--ink-45); font-size: 0.8125rem; }
+
+.ea .modal-content, .ea .dropdown-menu, .ea .offcanvas {
+  border-radius: 0;
+  border-color: var(--rule-strong);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.ea .list-pagination, .ea .pagination { font-size: 0.8125rem; }
+.ea .page-link, .ea .pagination .page-link {
+  border-radius: 0;
+  color: var(--signal-ink);
+  border-color: var(--rule);
+  background: var(--surface);
+}
+.ea .page-item.active .page-link { background: var(--signal-ink); border-color: var(--signal-ink); color: #fff; }
+
+.ea .card, .ea .content-panel { box-shadow: none; border-radius: 0; }
+
+.ea .field-boolean .form-switch { margin: 0; }
+
+/* Detail pages: EasyAdmin's definition list, as a fact table. */
+.ea .datalist { font-size: 0.875rem; }
+.ea .datalist dt, .ea .datalist .datalist-label { color: var(--ink-45); font-weight: 500; }
+
+/* Anything still drawing a shadow or a rounded corner, anywhere. */
+.ea .btn, .ea .badge, .ea .form-control, .ea .form-select, .ea .alert, .ea .dropdown-menu,
+.ea .modal-content, .ea .page-item .page-link, .ea .nav-tabs .nav-link, .ea .input-group-text,
+pre, code, img.walk-figure { border-radius: 0; }
+
+/* ── Carried over from the reading pages (IP-149) ─────────────────────────────────────── */
+
+.text-muted { color: var(--ink-45) !important; }
+.text-danger { color: var(--fault) !important; }
+.text-warning { color: var(--stale) !important; }
+.text-success { color: var(--signal-ink) !important; }
+.border-danger { border-color: var(--fault) !important; }
+.small { font-size: 0.8125rem; }
+
+.card {
+  box-shadow: none;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  border-radius: 0;
+  margin-bottom: var(--s5);
+}
+.card-header {
+  background: var(--paper-sunk);
+  border-bottom: 1px solid var(--rule);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.6875rem;
+  color: var(--ink-45);
+  padding: 0.75rem 0.85rem;
+}
+.card-body { padding: var(--s3) 0.6rem; }
+.table-responsive { overflow-x: auto; }
+
+.bars { width: 100%; height: auto; display: block; }
+.bars rect { fill: var(--signal); }
+.bars rect.muted { fill: var(--rule-strong); }
+.bars text { font-size: 9px; fill: var(--ink-45); font-family: var(--font-mono); }
+.bars line { stroke: var(--rule); stroke-width: 1; }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--s4); }
+.figure { border: 1px solid var(--rule); padding: var(--s2); background: var(--surface); }
+.figure img.walk-figure { width: 100%; height: auto; display: block; }
+.figure .caption { font-size: 0.78rem; color: var(--ink-45); margin-top: 0.35rem; }
+.figure .missing { font-size: 0.82rem; color: var(--stale); padding: var(--s6) var(--s2); text-align: center; }
+
+pre.json {
+  max-height: 24rem;
+  overflow: auto;
+  font-size: 0.78rem;
+  border: 1px solid var(--rule);
+  padding: var(--s2);
+  margin: 0;
+  background: var(--paper-sunk);
+}
+
+.matrix td.cell { text-align: center; }
+.matrix td.cell .why { display: block; font-size: 0.68rem; color: var(--ink-45); text-transform: none; }
+
+/*
+ * THE ARMING MATRIX SCROLLS SIDEWAYS, AND MUST SAY SO. Five fact columns plus one per node is
+ * seventeen columns against a 1430px card, so the table has always been wider than its
+ * container. Two things made that unreadable when /admin went public on 2026-09-18.
+ *
+ * macOS draws OVERLAY scrollbars, which are invisible until something scrolls, so the container
+ * offered no affordance whatsoever: the table ended in a hard cut at the card edge and nothing
+ * on the page said the node columns continued past it. Styling ::-webkit-scrollbar opts this
+ * container out of overlay scrollbars, so the bar is always drawn and always takes its space.
+ *
+ * And the quest name scrolled away with everything else. At full scroll it sat at x = -181, so
+ * a reader looking at monad09 could no longer tell which quest the row belonged to — which is
+ * the one thing a matrix must never lose. The first column is pinned.
+ */
+.matrix-wrap { overflow-x: auto; }
+.matrix-wrap::-webkit-scrollbar { height: 12px; }
+.matrix-wrap::-webkit-scrollbar-track { background: var(--paper-sunk); }
+.matrix-wrap::-webkit-scrollbar-thumb { background: var(--rule-strong); border: 3px solid var(--paper-sunk); }
+.matrix-wrap::-webkit-scrollbar-thumb:hover { background: var(--ink-45); }
+
+/* The divider is a box-shadow, not a border: under `border-collapse: collapse` a border on a
+   sticky cell is owned by the collapsed grid and does not travel with the cell. */
+.matrix th:first-child,
+.matrix td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  box-shadow: inset -1px 0 0 var(--rule-strong);
+}
+.matrix tbody td:first-child { z-index: 1; }
+/* The corner outranks both, or whichever it scrolls under paints over it. */
+.matrix thead th:first-child { z-index: 3; background: var(--paper-sunk); }
+/* The row hover lives on `tr`, which an opaque sticky cell would hide. */
+.matrix tbody tr:hover td:first-child { background: #f3f8fa; }
+
+.matrix td.window { white-space: nowrap; }
+
+/* Bootstrap spacing utilities the reading pages use, kept so those templates still lay out
+   correctly inside this shell without being rewritten (they belong to later lanes). */
+.mb-0 { margin-bottom: 0 !important; }
+.mb-1 { margin-bottom: var(--s1) !important; }
+.mb-2 { margin-bottom: var(--s2) !important; }
+.mb-3 { margin-bottom: var(--s5) !important; }
+.mt-1 { margin-top: var(--s1) !important; }
+.mt-2 { margin-top: var(--s2) !important; }
+.mt-3 { margin-top: var(--s5) !important; }
+.me-1 { margin-right: var(--s1) !important; }
+.me-2 { margin-right: var(--s2) !important; }
+.ms-2 { margin-left: var(--s2) !important; }
+.pt-2 { padding-top: var(--s2) !important; }
+.pb-2 { padding-bottom: var(--s2) !important; }
+.d-none { display: none !important; }
+.text-end { text-align: right !important; }
+.text-center { text-align: center !important; }
+
+/* ── The quest builder's step header ──────────────────────────────────────────────────── */
+/* The tour found "Advanc" and "Dele" on the step rows. The buttons are flex items next to a
+   `flex: 1 1 auto` name input, so at the builder's column width the browser shrank the labels
+   rather than the input. Buttons do not shrink; the name field gives up the room instead. The
+   header wraps to a second line before anything is clipped. Fixed here rather than in
+   admin-quests.js because the markup was never wrong — only the layout was. */
+.step-head { flex-wrap: wrap; }
+.step-head > button,
+.step-head > .btn { flex: 0 0 auto; white-space: nowrap; }
+.step-head > .step-name { flex: 1 1 12rem; min-width: 6rem; }
+
+/* ── Narrow ───────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .mc-shell { grid-template-columns: minmax(0, 1fr); }
+  .mc-rail {
+    position: static;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .mc-wordmark { padding: var(--s4) var(--s4) var(--s3); }
+  .mc-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 0 var(--s2) 0;
+    border-top: 1px solid var(--rule);
+  }
+  .mc-nav a {
+    border-left: 0;
+    border-bottom: 3px solid transparent;
+    padding: 0.55rem var(--s2);
+    white-space: nowrap;
+    font-size: 0.875rem;
+  }
+  .mc-nav a.is-active { border-left: 0; border-bottom-color: var(--signal); background: transparent; }
+  .mc-rail-foot { display: none; }
+  .mc-top { position: static; flex-wrap: wrap; padding: var(--s3) var(--s4); }
+  .mc-top-right { width: 100%; justify-content: flex-start; }
+  .mc-content { padding: var(--s4); }
+  .strip { gap: var(--s4); }
+  table.ui-table thead th, .table-dense thead th, .ea table.datagrid thead th { position: static; }
+}
+
+/* Shared interaction layer: visible focus, consistent toolbars, readable data tables. */
+:focus-visible { outline: 2px solid var(--signal-ink); outline-offset: 3px; }
+/* The skip link is a BANNER, not a floating chip. It used to park itself at left:1rem top:1rem
+   on focus — exactly on top of the wordmark — in an opaque white box narrower than the rail, so
+   the brand vanished and the tail of "MonadCount" stuck out beside it, which reads as a
+   rendering fault rather than a control. Full width, solid signal ink, flush with the top edge:
+   it now covers the whole rail head while focused and is unmistakably deliberate. */
+.mc-skip {
+  position: fixed;
+  left: 0; right: 0; top: -5rem;
+  padding: 0.85rem 1.25rem;
+  background: var(--signal-ink); color: #fff;
+  font-weight: 600; text-decoration: none;
+  z-index: 100;
+}
+.mc-skip:focus { top: 0; }
+.mc-skip:focus-visible { outline: 2px solid #fff; outline-offset: -6px; }
+.mc-crumb:empty { display: none; }
+.mc-top { align-items: center; min-height: 88px; }
+.mc-top h1 { font-size: 1.65rem; }
+.mc-content { padding: 1.75rem 2rem; }
+.ui-section { margin-bottom: 2rem; }
+.ui-section > h2, .ui-head h2 { font-size: 1rem; text-transform: none; letter-spacing: 0; color: var(--ink); padding-bottom: .6rem; }
+.ui-note { color: var(--ink-70); max-width: 80ch; }
+.strip { gap: 1rem 2rem; padding: 1rem; background: var(--surface); }
+.strip .k { display: block; margin: 0 0 .2rem; color: var(--ink-70); font-size: .75rem; text-transform: none; letter-spacing: 0; }
+.strip > span { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.identity { line-height: 1.5; }
+.identity span { font-size: .8125rem; overflow-wrap: anywhere; }
+.attention a.attention-item { align-items: center; padding: .85rem 1rem; }
+.attention a.attention-item .n { text-align: left; font-size: 1.2rem; }
+.attention a.attention-item::after { content: '→'; color: var(--ink-70); }
+table.ui-table tbody tr:hover, .table-dense tbody tr:hover { background: #f3f8fa; }
+.state { display: inline-block; padding: .1rem .4rem; background: var(--paper-sunk); font-weight: 500; }
+.state-ok { background: var(--signal-wash); }
+.state-warn { background: var(--stale-wash); }
+.state-bad { background: var(--fault-wash); }
+.ui-toolbar, .ui-crud-search, .mc-table-filters { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
+.ui-toolbar > p { margin: 0; flex: 1; }
+.ui-toolbar input, .ui-crud-search input, .mc-table-filters select, .dt-container input, .dt-container select {
+  min-height: 38px; padding: .45rem .6rem; border: 1px solid var(--rule-strong); background: white; color: var(--ink); font: inherit;
+}
+.ui-crud-search input[type=search] { min-width: 16rem; }
+.ui-crud-search label { font-weight: 500; }
+.mc-table-filters { padding: .75rem 1rem 0; margin-bottom: 0; }
+.mc-table-filters label { display: flex; align-items: center; gap: .5rem; font-size: .875rem; }
+.mc-table-filters .ui-btn { margin-left: auto; }
+.ui-table-wrap:has(.dt-container), .table-responsive:has(.dt-container) { overflow: visible; }
+.dt-container { width: 100%; font-size: .875rem; }
+.dt-container .dt-layout-row:not(.dt-layout-table) { padding: .6rem 1rem; margin: 0; gap: 1rem; }
+.dt-container .dt-layout-table { overflow-x: auto; margin: 0; }
+.dt-container .dt-layout-cell { min-width: 0; }
+.dt-container table.dataTable { width: 100% !important; margin: 0; }
+.dt-container table.dataTable th, .dt-container table.dataTable td { padding: .75rem .85rem; }
+.dt-container table.dataTable thead th { padding-right: 1.9rem; color: var(--ink-70); font-size: .8125rem; text-transform: none; letter-spacing: 0; }
+.dt-container .dt-info { color: var(--ink-70); }
+.dt-container .dt-paging button { min-width: 36px; min-height: 36px; }
+.dt-container .dt-paging button.current { background: var(--signal-wash) !important; border-color: var(--signal-ink) !important; color: var(--signal-ink) !important; }
+.dt-container .dt-paging button:hover { background: var(--paper-sunk) !important; color: var(--ink) !important; }
+.dt-container .dt-search input { margin-left: .5rem; }
+.mc-table-empty { padding: 2rem !important; text-align: center !important; }
+.ui-disclosure { border-top: 1px solid var(--rule); padding-top: .75rem; }
+.ui-disclosure > summary, details.row-details > summary { cursor: pointer; color: var(--signal-ink); padding: .4rem 0; }
+.row-details { white-space: normal; min-width: 10rem; }
+.row-details dl { margin: .75rem 0; font-size: .8125rem; }
+.row-details dt { margin-top: .5rem; color: var(--ink-70); font-weight: 500; }
+.row-details dd { margin: 0; overflow-wrap: anywhere; }
+.row-actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.row-actions form { margin: 0; }
+.ui-chart { min-width: 0; width: 100%; height: 280px; }
+.ui-chart-frame { border: 1px solid var(--rule); background: white; padding: 1rem; margin: 0 0 1.5rem; }
+.ui-chart-frame figcaption { color: var(--ink-70); font-size: .875rem; margin-top: .5rem; }
+.ui-chart-frame h2 { font-size: 1rem; }
+.ui-chart-frame .ui-table-wrap { margin-top: .75rem; }
+.ui-chart-empty { padding: 2rem 1rem; color: var(--ink-70); }
+@media (max-width: 900px) {
+  .mc-content { padding: 1rem; }
+  .mc-top { min-height: 0; }
+  .mc-top h1 { font-size: 1.4rem; }
+  .mc-top-right { width: auto; flex-wrap: wrap; }
+  .dt-container .dt-layout-row:not(.dt-layout-table) { align-items: stretch; }
+  .dt-container .dt-search { text-align: left; }
+  .dt-container .dt-search input { max-width: 65%; }
+  .mc-table-filters label { flex-wrap: wrap; }
+  .strip { gap: .75rem 1.5rem; }
+}
+
+.card .ui-chart-frame { border: 0; padding: 0; margin-bottom: .75rem; }
+.quest-window { min-width: 11rem; }
+.quests-index td.actions { min-width: 10rem; }
+.quests-index td.actions .row-details { min-width: 0; }
+@media (max-width: 650px) {
+  .dt-layout-table::before { content: 'Scroll horizontally to view all columns'; display: block; color: var(--ink-70); font-size: .75rem; padding: .5rem 1rem; }
+}

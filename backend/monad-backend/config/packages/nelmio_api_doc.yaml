@@ -13,7 +13,7 @@ nelmio_api_doc:
                     type: http
                     scheme: bearer
                     bearerFormat: JWT
-                    description: JWT token obtained from /api/login_check endpoint
+                    description: JWT token obtained from POST /api/auth/login
     areas:
         path_patterns:
             - ^/api(?!/doc$)

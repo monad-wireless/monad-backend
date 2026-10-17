@@ -1,0 +1,59 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{# /admin/quests/analytics does not sit under /admin/lab/quests, so the layout's longest-prefix
+   match finds no rail entry and nothing is marked. Name the owning section explicitly, the way
+   the per-quest page already does. #}
+{% set mc_active = 'admin_lab_quests' %}
+{% block breadcrumb %}<a href="{{ path('admin_lab_quests') }}">Quests</a> / Analytics{% endblock %}
+
+{% block content_title %}Quest analytics{% endblock %}
+
+{% block main %}
+    <p class="text-muted small">
+        The funnel per quest, from every enrollment ever started. Completion rate is completed over started;
+        p50 is the median wall-clock duration of completed runs (start to the client's completion), when at
+        least three exist. Click a quest for the distribution, the skip reasons and the steps that fail.
+    </p>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-dense mb-0">
+                <thead>
+                    <tr>
+                        <th>Quest</th>
+                        <th>Audience</th>
+                        <th class="num">Started</th>
+                        <th class="num">Completed</th>
+                        <th class="num">Abandoned</th>
+                        <th class="num">Failed</th>
+                        <th class="num">In progress</th>
+                        <th class="num">Completion</th>
+                        <th class="num">p50 duration</th>
+                        <th class="num">Skips</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        {% set f = row.analytics.funnel %}
+                        {% set skips = 0 %}
+                        {% for r in row.analytics.skip_reasons %}{% set skips = skips + r.n %}{% endfor %}
+                        <tr>
+                            <td><a href="{{ path('admin_quest_analytics', {id: row.quest.id}) }}">{{ row.quest.name }}</a></td>
+                            <td>{{ row.quest.audience }}</td>
+                            <td class="num">{{ f.started }}</td>
+                            <td class="num">{{ f.completed }}</td>
+                            <td class="num">{{ f.abandoned }}</td>
+                            <td class="num">{{ f.failed }}</td>
+                            <td class="num">{{ f.in_progress }}</td>
+                            <td class="num">{{ f.started > 0 ? (f.completed / f.started * 100)|round ~ ' %' : '—' }}</td>
+                            <td class="num">{{ row.analytics.quantiles ? row.analytics.quantiles.p50|duration : '—' }}</td>
+                            <td class="num">{{ skips }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="10" class="text-muted">No quests.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

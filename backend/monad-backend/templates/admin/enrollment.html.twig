@@ -1,0 +1,119 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% import 'admin/_macros.html.twig' as m %}
+
+{% block content_title %}Enrollment {{ enrollment.id|short_id }}{% endblock %}
+
+{% block main %}
+    <div class="strip">
+        <span><span class="k">Participant</span>{% if enrollment.user %}<a href="{{ path('admin_participant', {id: enrollment.user.id}) }}">{{ enrollment.user.email }}</a>{% else %}—{% endif %}</span>
+        <span><span class="k">Quest</span>{% if enrollment.quest %}<a href="{{ path('admin_quest_analytics', {id: enrollment.quest.id}) }}">{{ enrollment.quest.name }}</a>{% else %}—{% endif %}</span>
+        <span><span class="k">Node</span><code>{{ enrollment.device ? enrollment.device.slug : '—' }}</code></span>
+        <span><span class="k">State</span>{{ m.state(enrollment.status) }}</span>
+        <span><span class="k">Started</span>{{ enrollment.createdAt|clock }}</span>
+        <span><span class="k">Completion received</span>{{ enrollment.completionReceivedAt|clock }}</span>
+        <span><span class="k">Points</span>{{ enrollment.pointsAwarded is null ? '—' : enrollment.pointsAwarded|number_format(1) }}{% if enrollment.awardedAt %} frozen {{ enrollment.awardedAt|clock }}{% endif %}</span>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card mb-3">
+                <div class="card-header">Run</div>
+                <table class="table table-sm table-dense table-facts mb-0">
+                    <tbody>
+                        <tr><th>Enrollment id</th><td><code>{{ enrollment.id }}</code></td></tr>
+                        <tr><th>Data path</th><td><code>{{ enrollment.dataPath ?? '—' }}</code></td></tr>
+                        <tr><th>Completed (client clock)</th><td>{{ enrollment.completedAt|clock }}</td></tr>
+                        <tr><th>Realised route</th><td>{% if enrollment.realisedSteps %}<code>{{ enrollment.realisedSteps|join(' → ') }}</code>{% else %}<span class="text-muted">declared order</span>{% endif %}</td></tr>
+                        <tr><th>Handset</th><td>{% if enrollment.handset %}<a href="{{ path('admin_handset', {id: enrollment.handset.id}) }}">{{ enrollment.handset.displayName }}</a>{% else %}<span class="text-muted">not reported (app build predates IP-149)</span>{% endif %}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            {% for block in snapshot_blocks %}
+                <div class="card mb-3">
+                    <div class="card-header">handset at start · {{ block.name }}</div>
+                    <div class="table-responsive">{{ m.facts(block.rows) }}</div>
+                </div>
+            {% else %}
+                <div class="card mb-3">
+                    <div class="card-header">handset at start</div>
+                    <div class="card-body"><p class="text-muted small mb-0">No descriptor on this enrollment.</p></div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Steps, in the order this walker was asked</div>
+        <div class="table-responsive">
+            <table class="table table-sm table-dense mb-0">
+                <thead>
+                    <tr><th class="num">#</th><th>Step</th><th>Type</th><th>State</th><th>Started</th><th>Completed</th><th>Duration</th><th class="num">mono_ns</th><th class="wrap">Step data</th><th class="wrap">Skips</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in timeline %}
+                        {% set c = row.completion %}
+                        <tr>
+                            <td class="num">{{ row.index ?? '—' }}</td>
+                            <td>{{ row.step ? row.step.name : '(step deleted)' }}</td>
+                            <td><code>{{ row.step and row.step.type ? row.step.type.value : '—' }}</code></td>
+                            <td>{% if c %}{{ m.state(c.status) }}{% else %}<span class="state state-muted">not served</span>{% endif %}</td>
+                            <td>{{ c ? c.startedAt|clock : '—' }}</td>
+                            <td>{{ c ? c.completedAt|clock : '—' }}</td>
+                            <td>{% if c and c.startedAt and c.completedAt %}{{ (c.completedAt.timestamp - c.startedAt.timestamp)|duration }}{% else %}—{% endif %}</td>
+                            <td class="num">{{ c and c.monoNs ? c.monoNs : '—' }}</td>
+                            <td class="wrap">{% if c and c.stepData is not empty %}<pre class="json mb-0">{{ c.stepData|json_encode(constant('JSON_PRETTY_PRINT') b-or constant('JSON_UNESCAPED_SLASHES')) }}</pre>{% else %}—{% endif %}</td>
+                            <td class="wrap">
+                                {% if c %}
+                                    {% for skip in c.skipRecords %}
+                                        <div><code>{{ skip.errorCode ?? 'no code' }}</code> {{ skip.message }}</div>
+                                    {% else %}—{% endfor %}
+                                {% else %}—{% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="10" class="text-muted">No steps.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Recording sessions naming this enrollment</div>
+        <div class="table-responsive">{{ m.session_rows(sessions, false) }}</div>
+    </div>
+
+    {% for session in sessions %}
+        <div class="card mb-3">
+            <div class="card-header">The walk · session {{ session.shortId }}</div>
+            <div class="card-body">{{ m.figures(figures[session.id], session.id) }}</div>
+        </div>
+    {% endfor %}
+
+    <div class="card">
+        <div class="card-header">Ground truth naming those sessions</div>
+        <div class="table-responsive">
+            <table class="table table-sm table-dense mb-0">
+                <thead><tr><th>Received</th><th>Recording session</th><th>Ground-truth session</th><th>Zone</th><th>Direction</th><th class="num">mono_ns</th></tr></thead>
+                <tbody>
+                    {% for scan in scans %}
+                        <tr>
+                            <td>{{ scan.receivedAt|clock }}</td>
+                            <td><code>{{ scan.recordingSessionId|short_id }}</code></td>
+                            <td><a href="{{ path('admin_lab_session', {labSessionId: scan.labSessionId}) }}"><code>{{ scan.labSessionId }}</code></a></td>
+                            <td><code>{{ scan.zoneId }}</code></td>
+                            <td>{{ scan.direction.value }}</td>
+                            <td class="num">{{ scan.monoNs }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="6" class="text-muted">None.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {{ m.walk_info_script() }}
+{% endblock %}

@@ -1,8 +1,11 @@
-# Environment files
+# Environment files. docker-compose.deploy.yml reads the deployment's secrets (Hetzner S3 keys,
+# JWT passphrase, database password) from a local .env that must never be committed.
 .env
 .env.dev
 .env.local
 .env.*.local
+.env.deploy
+.env.prod
 
 # IDEs
 .idea/

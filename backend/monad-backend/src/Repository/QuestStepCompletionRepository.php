@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\Quest;
 use App\Entity\QuestStepCompletion;
 use App\Enum\QuestStepCompletionStatus;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -65,6 +66,45 @@ class QuestStepCompletionRepository extends ServiceEntityRepository
             ->orderBy('c.createdAt', 'DESC')
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * How many step completions this quest's runs hold (IP-157), for the quest builder.
+     *
+     * Counted through the ENROLLMENT, not the step: a quest edited in place leaves its earlier
+     * runs' completions with step_id NULL (Version20260920180000), and they are still runs.
+     */
+    public function countForQuest(Quest $quest): int
+    {
+        return (int) $this->createQueryBuilder('c')
+            ->select('COUNT(c.id)')
+            ->join('c.enrollment', 'e')
+            ->andWhere('e.quest = :quest')
+            ->setParameter('quest', $quest)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
+     * Completions per quest, for the builder's index. Quests with none are absent.
+     *
+     * @return array<string, int> keyed by quest id (RFC 4122)
+     */
+    public function countByQuest(): array
+    {
+        $rows = $this->createQueryBuilder('c')
+            ->select('IDENTITY(e.quest) AS quest_id, COUNT(c.id) AS n')
+            ->join('c.enrollment', 'e')
+            ->groupBy('e.quest')
+            ->getQuery()
+            ->getArrayResult();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(string) $row['quest_id']] = (int) $row['n'];
+        }
+
+        return $out;
     }
 
     /**

@@ -1,0 +1,67 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% import 'admin/_macros.html.twig' as m %}
+
+{% block content_title %}Participant {{ participant.email ?? participant.id|short_id }}{% endblock %}
+
+{% block main %}
+    <div class="strip">
+        <span><span class="k">Id</span><code>{{ participant.id }}</code></span>
+        <span><span class="k">Name</span>{{ participant.name ?? '—' }}</span>
+        <span><span class="k">Status</span>{{ participant.status.value }}</span>
+        <span><span class="k">Roles</span>{{ participant.roles|join(', ') }}</span>
+        <span><span class="k">Registered</span>{{ participant.createdAt|clock }}</span>
+        <span><a href="{{ ea_url().setController('App\\Controller\\Admin\\UserCrudController').setAction('detail').setEntityId(participant.id) }}">account record</a></span>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card mb-3">
+                <div class="card-header">What their walking produced</div>
+                <table class="table table-sm table-dense table-facts mb-0">
+                    <tbody>
+                        <tr><th>Points (frozen awards)</th><td>{{ stats.points_total|number_format(1) }}</td></tr>
+                        <tr><th>Quests completed</th><td>{{ stats.quests_completed }}</td></tr>
+                        <tr><th>Dwells</th><td>{{ stats.contribution.dwells }}</td></tr>
+                        <tr><th>Dwell time</th><td>{{ stats.contribution.dwell_seconds|duration }}</td></tr>
+                        <tr><th>Distinct points</th><td>{{ stats.contribution.distinct_points }}</td></tr>
+                        <tr><th>Points visited</th><td class="wrap"><code>{{ stats.contribution.points_visited|join(' ') ?: '—' }}</code></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card mb-3">
+                <div class="card-header">Handsets used</div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-dense mb-0">
+                        <thead><tr><th>Handset</th><th>Platform</th><th>Machine</th><th>Latest OS</th><th>Latest build</th><th class="num">Runs (all users)</th></tr></thead>
+                        <tbody>
+                            {% for h in handsets %}
+                                <tr>
+                                    <td><a href="{{ path('admin_handset', {id: h.id}) }}">{{ h.displayName }}</a></td>
+                                    <td>{{ h.platform }}</td>
+                                    <td><code>{{ h.machine ?? '—' }}</code></td>
+                                    <td>{{ h.osVersion ?? '—' }}</td>
+                                    <td><code>{{ h.build ?? '—' }}</code></td>
+                                    <td class="num">{{ h.enrollmentCount }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="6" class="text-muted">No run of theirs carried a handset descriptor.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Enrollments</div>
+        <div class="table-responsive">{{ m.enrollment_rows(enrollments, false) }}</div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Recording sessions</div>
+        <div class="table-responsive">{{ m.session_rows(sessions, false) }}</div>
+    </div>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% import 'admin/_ui.html.twig' as ui %}
+
+{% set mc_active = 'admin_lab_quests' %}
+{% block breadcrumb %}<a href="{{ path('admin_lab_quests') }}">Quests</a> / Analytics{% endblock %}
+
+{% block content_title %}{{ quest.name }} — analytics{% endblock %}
+
+{% block main %}
+    {% set f = analytics.funnel %}
+    <div class="strip">
+        <span><span class="k">Audience</span>{{ quest.audience }}</span>
+        <span><span class="k">Window</span>{{ quest.availableFrom|clock }} → {{ quest.availableTo ? quest.availableTo|clock : 'open' }}</span>
+        <span><span class="k">Points</span>{{ quest.points|number_format(1) }}</span>
+        <span><span class="k">Needs</span>{{ quest.requiredCapabilities|join(' ') ?: '—' }}</span>
+        <span><a href="{{ ea_url().setController('App\\Controller\\Admin\\QuestCrudController').setAction('detail').setEntityId(quest.id) }}">quest record</a></span>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card mb-3">
+                <div class="card-header">Funnel</div>
+                <div class="card-body">
+                    {{ ui.chart('quest-outcomes', 'Started runs and their outcomes', [
+                        {label: 'started', value: f.started},
+                        {label: 'completed', value: f.completed},
+                        {label: 'abandoned', value: f.abandoned},
+                        {label: 'failed', value: f.failed},
+                        {label: 'in progress', value: f.in_progress},
+                    ]) }}
+                    <p class="text-muted small mb-0 mt-2">Completion {{ f.started > 0 ? (f.completed / f.started * 100)|round ~ ' %' : '—' }} of {{ f.started }} started.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card mb-3">
+                <div class="card-header">Duration of completed runs</div>
+                <div class="card-body">
+                    {% if analytics.quantiles %}
+                        <div class="strip mb-2">
+                            <span><span class="k">n</span>{{ analytics.durations|length }}</span>
+                            <span><span class="k">p10</span>{{ analytics.quantiles.p10|duration }}</span>
+                            <span><span class="k">p50</span>{{ analytics.quantiles.p50|duration }}</span>
+                            <span><span class="k">p90</span>{{ analytics.quantiles.p90|duration }}</span>
+                        </div>
+                        {{ ui.chart('quest-duration', 'Completed run duration', histogram) }}
+                        <p class="text-muted small mb-0 mt-2">Twelve equal bins from the shortest to the longest completed run. Start is the enrollment's creation on the server; end is the completion time the client reported. Spans under zero or over a day are clock artefacts and are excluded.</p>
+                    {% elseif analytics.durations is not empty %}
+                        <p class="small mb-0">Fewer than three completed runs: {{ analytics.durations|map(d => d|duration)|join(', ') }}. No quantiles from so few.</p>
+                    {% else %}
+                        <p class="text-muted small mb-0">No completed run with a usable duration.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card mb-3">
+                <div class="card-header">Skip reasons</div>
+                <div class="card-body">
+                    {{ ui.chart('quest-skips', 'Reported skip reasons', analytics.skip_reasons|map(r => {label: r.error_code, value: r.n}), 'Skips') }}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card mb-3">
+                <div class="card-header">Completions per node</div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-dense mb-0">
+                        <thead><tr><th>Node</th><th class="num">Started</th><th class="num">Completed</th><th class="num">Completion</th></tr></thead>
+                        <tbody>
+                            {% for d in analytics.per_device %}
+                                <tr>
+                                    <td><code>{{ d.slug }}</code></td>
+                                    <td class="num">{{ d.started }}</td>
+                                    <td class="num">{{ d.completed }}</td>
+                                    <td class="num">{{ d.started > 0 ? (d.completed / d.started * 100)|round ~ ' %' : '—' }}</td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="4" class="text-muted">No enrollments.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Steps: what completes and what does not</div>
+        <div class="table-responsive">
+            <table class="table table-sm table-dense mb-0">
+                <thead><tr><th>Step</th><th>Type</th><th class="num">Completed</th><th class="num">Skipped</th><th class="num">Failed</th><th class="num">Skip share</th></tr></thead>
+                <tbody>
+                    {% for s in analytics.step_skips %}
+                        {% set total = s.completed + s.skipped + s.failed %}
+                        {% set share = total > 0 ? ((s.skipped + s.failed) / total * 100)|round : null %}
+                        <tr>
+                            <td>{{ s.step }}</td>
+                            <td><code>{{ s.type }}</code></td>
+                            <td class="num">{{ s.completed }}</td>
+                            <td class="num">{{ s.skipped }}</td>
+                            <td class="num">{{ s.failed }}</td>
+                            <td class="num {{ share is not null and share >= 50 ? 'state-bad' : '' }}">{{ share is null ? '—' : share ~ ' %' }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="6" class="text-muted">No step completions yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="card-body pt-2 pb-2">
+            <p class="text-muted small mb-0">A run of skips at one step across handsets is a broken step config, not eight broken participants.</p>
+        </div>
+    </div>
+{% endblock %}
+
+{% block body_javascript %}
+    {{ parent() }}
+    <script src="{{ asset('vendor/plotly.min.js') }}" defer></script>
+    <script src="{{ asset('admin-charts.js') }}" defer></script>
+{% endblock %}
