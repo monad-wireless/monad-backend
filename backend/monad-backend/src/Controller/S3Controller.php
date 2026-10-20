@@ -6,6 +6,7 @@ use App\Constants\ErrorCode;
 use App\Entity\User;
 use App\Exception\AuthException;
 use App\Exception\ValidationException;
+use App\Lab\Evidence\UploadedManifestSealer;
 use App\Service\LabSessionRegister;
 use App\Service\LabTelemetry;
 use App\Service\S3Service;
@@ -26,6 +27,7 @@ class S3Controller extends AbstractController
         private S3Service $s3Service,
         private LabTelemetry $telemetry,
         private LabSessionRegister $register,
+        private UploadedManifestSealer $evidence,
         private LoggerInterface $logger,
     ) {
     }
@@ -501,6 +503,9 @@ class S3Controller extends AbstractController
         if ($sidecar !== null) {
             $this->register->sessionCompleted($sessionId, $participantId, $user, $sidecar);
         }
+        if ($sidecar !== null || $filename === UploadedManifestSealer::MANIFEST) {
+            $this->sealUploadedEvidence($sessionId, $user);
+        }
 
         // The counter above says how many artefacts arrived; it cannot say WHICH, for WHICH session,
         // or how big. This hop — phone to archive — is the most fragile step in the whole instrument
@@ -777,6 +782,9 @@ class S3Controller extends AbstractController
                 $this->register->sessionCompleted($sessionId, $participantId, $user instanceof User ? $user : null, $raw);
             }
         }
+        if ($filename === 'metadata.json' || $filename === UploadedManifestSealer::MANIFEST) {
+            $this->sealUploadedEvidence($sessionId, $user instanceof User ? $user : null);
+        }
 
         $this->logger->info(
             '[lab-upload] artefact stored (multipart): {artefact} for session {session_id} '
@@ -832,6 +840,42 @@ class S3Controller extends AbstractController
         );
 
         return $this->json(['success' => true], Response::HTTP_OK);
+    }
+
+    /**
+     * IP-162 — seal the recording from the manifest the phone uploaded, once the sidecar is up.
+     *
+     * The app uploads the manifest before the sidecar and never calls the seal route, so this is
+     * where a Counting recording gets sealed. Nothing is sealed until the register marks the
+     * recording complete, which is why both arrival orders call in here.
+     *
+     * A seal failure is logged and NOT rethrown. The artefact is already in the bucket and in the
+     * register; failing the request would make the phone re-upload a stored file, and the seal is
+     * recoverable server-side by `app:lab-evidence:seal-uploaded`.
+     */
+    private function sealUploadedEvidence(string $sessionId, ?User $user): void
+    {
+        try {
+            $outcome = $this->evidence->sealIfUploaded($sessionId, $user);
+        } catch (\Throwable $e) {
+            $this->logger->error(
+                '[lab-evidence] seal on upload FAILED for session {session_id}: {error}',
+                ['session_id' => $sessionId, 'error' => $e->getMessage()]
+            );
+
+            return;
+        }
+        if ($outcome === null) {
+            return;
+        }
+        $this->logger->info(
+            '[lab-evidence] seal on upload: session {session_id} {status} ({reasons})',
+            [
+                'session_id' => $sessionId,
+                'status' => $outcome->status,
+                'reasons' => $outcome->reasons === [] ? 'none' : implode(', ', $outcome->reasons),
+            ]
+        );
     }
 
     /**

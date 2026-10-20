@@ -219,6 +219,34 @@ class LabSessionRepository extends ServiceEntityRepository
         return $qb->getQuery()->getResult();
     }
 
+    /**
+     * Complete recordings that list `$filename` and have no evidence seal attempt of any
+     * disposition, oldest first. The candidates of `app:lab-evidence:seal-uploaded` (IP-162): a
+     * recording with a pending, invalid or conflicting attempt already has a disposition, and
+     * `app:lab-evidence:reconcile` owns the pending ones.
+     *
+     * @return list<string> recording session ids
+     */
+    public function findUnsealedWithArtefact(string $filename, int $limit): array
+    {
+        // `jsonb_exists()` rather than the `?` operator, which PDO would read as a placeholder.
+        $sql = <<<'SQL'
+            SELECT s.id
+              FROM lab_sessions s
+             WHERE s.completed_at IS NOT NULL
+               AND jsonb_exists(s.artefacts, :name)
+               AND NOT EXISTS (SELECT 1 FROM lab_evidence_manifests m WHERE m.recording_session_id = s.id)
+             ORDER BY s.first_artefact_at ASC
+             LIMIT :limit
+            SQL;
+
+        return array_map('strval', $this->getEntityManager()->getConnection()->fetchFirstColumn(
+            $sql,
+            ['name' => $filename, 'limit' => $limit],
+            ['name' => ParameterType::STRING, 'limit' => ParameterType::INTEGER],
+        ));
+    }
+
     /** @return list<LabSession> */
     public function findForEnrollment(QuestEnrollment $enrollment): array
     {

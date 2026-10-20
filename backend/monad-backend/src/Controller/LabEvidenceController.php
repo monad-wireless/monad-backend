@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Entity\LabSession;
 use App\Entity\User;
 use App\Lab\Evidence\EvidenceSealService;
+use App\Lab\Evidence\UploadedManifestSealer;
 use App\Repository\LabEvidenceManifestRepository;
 use App\Repository\LabReferenceReceiptRepository;
 use App\Repository\LabSessionRepository;
@@ -27,7 +28,7 @@ use Symfony\Component\Routing\Annotation\Route;
  */
 final class LabEvidenceController extends AbstractController
 {
-    private const MAX_MANIFEST_BYTES = 256 * 1024;
+    private const MAX_MANIFEST_BYTES = UploadedManifestSealer::MAX_MANIFEST_BYTES;
 
     public function __construct(
         private readonly LabSessionRepository $sessions,

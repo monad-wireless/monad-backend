@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Lab\Evidence;
 
+use App\Command\SealUploadedEvidenceCommand;
 use App\Entity\LabEvidenceManifest;
 use App\Entity\LabReferenceReceipt;
 use App\Entity\Quest;
@@ -20,6 +21,7 @@ use App\Lab\Evidence\EvidenceSealService;
 use App\Lab\Evidence\SealOutcome;
 use App\Lab\Evidence\SweepReceiptService;
 use App\Lab\Evidence\TooLargeToVerify;
+use App\Lab\Evidence\UploadedManifestSealer;
 use App\Repository\LabEvidenceManifestRepository;
 use App\Repository\LabReferenceReceiptRepository;
 use App\Repository\LabSessionRepository;
@@ -27,6 +29,7 @@ use App\Service\LabSessionRegister;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Console\Tester\CommandTester;
 
 /**
  * The evidence seal and the sweep receipts, against a real PostgreSQL (IP-162 §3).
@@ -222,6 +225,90 @@ final class EvidenceSealFlowTest extends KernelTestCase
         self::assertContains('enrollment_id: does not match the recording\'s enrollment', $outcome->reasons);
     }
 
+    // ── sealing the manifest the phone uploaded (2026-10-20) ────────────────────────────────
+
+    public function testTheUploadedManifestSealsACompleteRecording(): void
+    {
+        self::assertSame([], $this->receiptService->recordCompletion($this->sweepStep, $this->summary()));
+        $this->em->flush();
+        $raw = $this->uploadManifest($this->manifest());
+
+        $outcome = $this->sealer()->sealIfUploaded(self::RECORDING, $this->participant);
+        self::assertNotNull($outcome);
+        self::assertSame(SealOutcome::VERIFIED, $outcome->status, json_encode($outcome->toArray()));
+        self::assertSame(CanonicalJson::sha256OfJson($raw), $outcome->row?->getManifestSha256(), 'the digest is taken over the uploaded bytes');
+
+        $this->em->clear();
+        $receipt = $this->receipts->findForSweep(self::RECORDING, \Symfony\Component\Uid\Uuid::fromString(self::SWEEP));
+        self::assertSame(LabReferenceReceipt::STATUS_VERIFIED, $receipt?->getStatus());
+    }
+
+    public function testTheSidecarArrivingAfterTheSessionWasLoadedStillSeals(): void
+    {
+        // The upload path's order with nothing cleared: the recording is already in the identity
+        // map, incomplete and without a manifest, when the register's SQL completes it.
+        $this->em->getConnection()->executeStatement('UPDATE lab_sessions SET completed_at = NULL WHERE id = :id', ['id' => self::RECORDING]);
+        $this->em->clear();
+        $this->participant = $this->em->find(User::class, $this->participant->getId());
+        self::assertFalse($this->session()->isComplete());
+
+        $raw = json_encode($this->manifest(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        $this->bucket->bytes[UploadedManifestSealer::MANIFEST] = $raw;
+        $participantId = $this->participant->getId()->toRfc4122();
+        $this->register->artefactStored(self::RECORDING, $participantId, $this->participant, UploadedManifestSealer::MANIFEST, strlen($raw), 'application/json', 'single');
+        $this->register->sessionCompleted(self::RECORDING, $participantId, $this->participant, $this->sidecarBytes());
+
+        $outcome = $this->sealer()->sealIfUploaded(self::RECORDING, $this->participant);
+        self::assertSame(SealOutcome::VERIFIED, $outcome?->status, json_encode($outcome?->toArray()));
+    }
+
+    public function testARecordingWithoutAnUploadedManifestIsNotSealed(): void
+    {
+        self::assertNull($this->sealer()->sealIfUploaded(self::RECORDING, $this->participant));
+        self::assertSame([], $this->manifests->findForRecording(self::RECORDING));
+    }
+
+    public function testAnUnreadableUploadedManifestIsInvalidAndWritesNoRow(): void
+    {
+        $this->uploadManifest(null, '[1, 2, 3]');
+        $outcome = $this->sealer()->sealIfUploaded(self::RECORDING, $this->participant);
+        self::assertSame(SealOutcome::INVALID, $outcome?->status);
+        self::assertSame(['evidence-manifest.json: not a JSON object'], $outcome?->reasons);
+        self::assertSame([], $this->manifests->findForRecording(self::RECORDING));
+    }
+
+    public function testTheUploadedManifestOfAStrangersRecordingIsRefused(): void
+    {
+        $this->uploadManifest($this->manifest());
+        $outcome = $this->sealer()->sealIfUploaded(self::RECORDING, $this->stranger);
+        self::assertSame(SealOutcome::INVALID, $outcome?->status);
+        self::assertContains('uploader: does not own this recording', $outcome?->reasons ?? []);
+        self::assertNull($this->manifests->findAccepted(self::RECORDING));
+    }
+
+    public function testTheBackfillSealsAnUploadedRecordingOnce(): void
+    {
+        self::assertSame([], $this->receiptService->recordCompletion($this->sweepStep, $this->summary()));
+        $this->em->flush();
+        $this->uploadManifest($this->manifest());
+        // Other recordings in the shared test database must not be read as ours.
+        $this->bucket->only = self::RECORDING;
+        $command = new CommandTester(new SealUploadedEvidenceCommand($this->sessions, $this->sealer()));
+
+        self::assertSame(0, $command->execute(['--dry-run' => true]));
+        self::assertStringContainsString('would seal ' . self::RECORDING, $command->getDisplay());
+        self::assertSame([], $this->manifests->findForRecording(self::RECORDING), 'a dry run writes nothing');
+
+        self::assertSame(0, $command->execute([]));
+        self::assertStringContainsString(self::RECORDING . ': verified', $command->getDisplay());
+        $this->em->clear();
+        self::assertNotNull($this->manifests->findAccepted(self::RECORDING));
+        $receipt = $this->receipts->findForSweep(self::RECORDING, \Symfony\Component\Uid\Uuid::fromString(self::SWEEP));
+        self::assertSame(LabReferenceReceipt::STATUS_VERIFIED, $receipt?->getStatus());
+
+        self::assertNotContains(self::RECORDING, $this->sessions->findUnsealedWithArtefact(UploadedManifestSealer::MANIFEST, 1000), 'a sealed recording is no longer a candidate');
+    }
+
     // ── the summary ─────────────────────────────────────────────────────────────────────────
 
     public function testASummaryUnderAnotherProtocolDigestFailsTheCompletion(): void
@@ -383,6 +470,31 @@ final class EvidenceSealFlowTest extends KernelTestCase
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
     }
 
+    private function sealer(): UploadedManifestSealer
+    {
+        return new UploadedManifestSealer($this->em, $this->sessions, $this->bucket, $this->seal);
+    }
+
+    /**
+     * Put the phone's manifest in the bucket and the register, as the upload path does. The
+     * manifest does not list itself, so it is built before it joins the bucket.
+     *
+     * @param array<string, mixed>|null $manifest
+     * @return string the uploaded bytes
+     */
+    private function uploadManifest(?array $manifest, ?string $raw = null): string
+    {
+        $raw ??= json_encode($manifest, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        $this->bucket->bytes[UploadedManifestSealer::MANIFEST] = $raw;
+        $this->register->artefactStored(self::RECORDING, $this->participant->getId()->toRfc4122(), $this->participant, UploadedManifestSealer::MANIFEST, strlen($raw), 'application/json', 'single', new \DateTimeImmutable('2026-09-22 10:00:30'));
+        $this->em->clear();
+        $this->participant = $this->em->find(User::class, $this->participant->getId());
+        $this->stranger = $this->em->find(User::class, $this->stranger->getId());
+        $this->sweepStep = $this->em->find(QuestStepCompletion::class, $this->sweepStep->getId());
+
+        return $raw;
+    }
+
     private function session(): \App\Entity\LabSession
     {
         $session = $this->sessions->find(self::RECORDING);
@@ -451,9 +563,14 @@ final class FakeArtefactReader implements ArtefactReader
     public array $bytes = [];
     /** @var array<string, int> */
     public array $tooLarge = [];
+    /** When set, every other recording reads as absent. */
+    public ?string $only = null;
 
     public function read(string $participantId, string $recordingSessionId, string $filename, int $maxBytes): string|TooLargeToVerify|null
     {
+        if ($this->only !== null && $recordingSessionId !== $this->only) {
+            return null;
+        }
         if (isset($this->tooLarge[$filename])) {
             return new TooLargeToVerify($this->tooLarge[$filename]);
         }
