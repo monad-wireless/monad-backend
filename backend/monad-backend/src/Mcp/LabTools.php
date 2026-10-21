@@ -1127,4 +1127,66 @@ class LabTools
             ),
         ];
     }
+
+    /**
+     * The recording-session register, newest first: which run uploaded what, for which quest, and
+     * whether its evidence is sealed. The ids it returns are what lab_session_references and the
+     * monad-knowledge reference tools take.
+     *
+     * @return array<string, mixed>
+     */
+    #[McpTool(
+        name: 'lab_runs',
+        description: 'Recording sessions the app uploaded (the lab_sessions register), newest first: '
+            . 'recording_session_id, participant, quest, enrollment, start/end on the phone wall clock, '
+            . 'completed_at, interrupted reason, whether an evidence manifest is sealed, and how many sweep '
+            . 'receipts exist. Filter by quest name and by first upload on or after `since` (YYYY-MM-DD, '
+            . 'Europe/Bratislava). A register read, never a count: the counts live in the uploaded events '
+            . '(monad-knowledge lab_counting_runs / lab_reference_inspect).',
+    )]
+    public function runs(?string $quest = null, ?string $since = null, int $limit = 100): array
+    {
+        $where = [];
+        $params = ['n' => max(1, min($limit, 500))];
+        if ($quest !== null && $quest !== '') {
+            $where[] = 'q.name = :quest';
+            $params['quest'] = $quest;
+        }
+        if ($since !== null && $since !== '') {
+            $day = \DateTimeImmutable::createFromFormat('!Y-m-d', $since, new \DateTimeZone('Europe/Bratislava'));
+            if ($day === false) {
+                return ['error' => sprintf('since must be YYYY-MM-DD, got "%s".', $since)];
+            }
+            $where[] = 's.first_artefact_at >= :since';
+            $params['since'] = $day->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+        }
+        $sql = 'SELECT s.id, s.participant_id, q.name AS quest, s.enrollment_id, s.started_wall_ms, s.ended_wall_ms,'
+            . ' s.first_artefact_at, s.completed_at, s.interrupted_reason,'
+            . ' EXISTS (SELECT 1 FROM lab_evidence_manifests m WHERE m.recording_session_id = s.id'
+            . "   AND m.state = 'accepted') AS sealed,"
+            . ' (SELECT COUNT(*) FROM lab_reference_receipts r WHERE r.recording_session_id = s.id) AS receipts'
+            . ' FROM lab_sessions s LEFT JOIN quests q ON q.id = s.quest_id'
+            . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
+            . ' ORDER BY s.first_artefact_at DESC LIMIT :n';
+        $rows = $this->entityManager->getConnection()->fetchAllAssociative($sql, $params, ['n' => \Doctrine\DBAL\ParameterType::INTEGER]);
+        $iso = static fn ($ms): ?string => $ms === null ? null
+            : (new \DateTimeImmutable('@' . intdiv((int) $ms, 1000)))->format(\DateTimeInterface::ATOM);
+
+        return [
+            'runs' => array_map(static fn (array $r): array => [
+                'recording_session_id' => $r['id'],
+                'source' => sprintf('app:%s/%s', $r['participant_id'], $r['id']),
+                'quest' => $r['quest'],
+                'enrollment_id' => $r['enrollment_id'],
+                'started_at' => $iso($r['started_wall_ms']),
+                'ended_at' => $iso($r['ended_wall_ms']),
+                'first_artefact_at' => $r['first_artefact_at'],
+                'completed_at' => $r['completed_at'],
+                'interrupted_reason' => $r['interrupted_reason'],
+                'sealed' => (bool) $r['sealed'],
+                'sweep_receipts' => (int) $r['receipts'],
+            ], $rows),
+            'count' => count($rows),
+        ];
+    }
 }
