@@ -1,11 +1,17 @@
-# FrankenPHP: a production HTTP server with PHP embedded — one process, no FPM/nginx pair.
+# PHP-FPM from the Docker Official Image (https://hub.docker.com/_/php). The container speaks
+# FastCGI only; the host nginx is the HTTP server (roles/monad_api in monad-knowledge renders it):
+# a loopback HTTP listener on 127.0.0.1:8084 serves public/ from disk and passes everything else
+# here. Every HTTP client of the API (the public vhost, the site's /join proxy, the tailnet entry,
+# monad-knowledge's quest tools) keeps calling 127.0.0.1:8084 and sees no change.
 #
-# This replaces `symfony server:start`, which the previous image ran in production. That is a
-# development server, unsupported for production by its own documentation, and single-request
-# oriented: one slow object-storage upload stalled every other request on the box.
-FROM dunglas/frankenphp:1.9-php8.3
+# Replaced FrankenPHP (dunglas/frankenphp) on 2026-10-22, by decision: only official images.
+#
+# The PHP patch level is pinned. 8.3.36 is the first 8.3 release that fixes CVE-2026-109618 and
+# CVE-2026-109619 (php2shell); never go below it.
+FROM php:8.3.36-fpm-trixie
 
-# Extensions:
+# Extensions, built with the official image's own tooling (docker-php-ext-*, pecl) rather than a
+# third-party installer:
 #   pdo_pgsql, zip, intl — application requirements
 #   opentelemetry        — the PECL extension the auto-instrumentation hooks into. Without it the
 #                          SDK still records manually created spans, but the Symfony / Doctrine /
@@ -14,13 +20,29 @@ FROM dunglas/frankenphp:1.9-php8.3
 #   protobuf             — OTLP encodes as protobuf; the pure-PHP fallback is far slower per
 #                          export, and this process exports on every request.
 #   opcache              — mandatory for any PHP service under load.
-RUN install-php-extensions \
-        pdo_pgsql \
-        zip \
-        intl \
-        opcache \
-        protobuf \
-        opentelemetry
+# The -dev packages are needed only to compile; the runtime libraries the extensions link against
+# are marked manual and kept, the -dev packages are purged. (The base image itself keeps its
+# $PHPIZE_DEPS toolchain installed; that is the official image's choice, not ours.)
+RUN set -eux; \
+    savedAptMark="$(apt-mark showmanual)"; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends $PHPIZE_DEPS libpq-dev libzip-dev libicu-dev unzip libfcgi-bin; \
+    docker-php-ext-install -j"$(nproc)" pdo_pgsql zip intl opcache; \
+    pecl install protobuf opentelemetry; \
+    docker-php-ext-enable protobuf opentelemetry; \
+    rm -rf /tmp/pear ~/.pearrc; \
+    apt-mark auto '.*' > /dev/null; \
+    apt-mark manual $savedAptMark unzip libfcgi-bin; \
+    find /usr/local -type f -executable -exec ldd '{}' ';' 2>/dev/null \
+        | awk '/=>/ { so = $(NF-1); if (index(so, "/usr/local/") == 1) { next }; gsub("^/(usr/)?", "", so); print so }' \
+        | sort -u \
+        | xargs -r dpkg-query --search \
+        | awk 'sub(":$", "", $1) { print $1 }' \
+        | sort -u \
+        | xargs -r apt-mark manual; \
+    apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false; \
+    rm -rf /var/lib/apt/lists/*; \
+    php -m | grep -qx pdo_pgsql; php -m | grep -qx protobuf; php -m | grep -qx opentelemetry
 
 # Upload limits mirror S3Service::MAX_FILE_SIZE (500 MB, raised 2026-08-20 for large LiDAR
 # mesh.ply / ARWorldMap artefacts). If the PHP limit were lower, an oversized session artefact
@@ -40,6 +62,23 @@ RUN { \
         echo "realpath_cache_ttl = 600"; \
     } > /usr/local/etc/php/conf.d/monad.ini
 
+# The FPM pool. The official image's default is pm.max_children = 5: five concurrent requests, so
+# five phones on a slow uplink would hold every worker for up to 3000 s and stall the whole API,
+# which is the failure FrankenPHP was brought in to end. 16 matches what FrankenPHP ran: on
+# 2026-10-22, dunglas/frankenphp:1.13.2-php8.3.36 with 8 CPUs logged `total_threads: 16`, and the
+# host is an 8-core CCX33. request_terminate_timeout is the FPM-side twin of
+# max_execution_time above; it also counts time spent outside PHP, such as the S3 stream.
+RUN { \
+        echo "[www]"; \
+        echo "pm = dynamic"; \
+        echo "pm.max_children = 16"; \
+        echo "pm.start_servers = 4"; \
+        echo "pm.min_spare_servers = 2"; \
+        echo "pm.max_spare_servers = 8"; \
+        echo "pm.max_requests = 1000"; \
+        echo "request_terminate_timeout = 3000s"; \
+    } > /usr/local/etc/php-fpm.d/zz-monad.conf
+
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
@@ -53,9 +92,6 @@ ENV APP_ENV=prod \
     # Router base for absolute URLs generated outside an HTTP request (console, API docs).
     DEFAULT_URI=https://api.monad.dubec.dev \
     CORS_ALLOW_ORIGIN='^https://(api\.)?monad\.dubec\.dev$' \
-    # FrankenPHP serves plain HTTP on 8000; TLS is terminated by the host nginx in front of it, so
-    # the container must not try to provision a certificate of its own.
-    SERVER_NAME=:8000 \
     # OpenTelemetry. The SDK bootstraps from composer autoload when this is on; the endpoint is
     # Alloy on the shared `monad` docker network (IP-051 LGTM stack).
     OTEL_PHP_AUTOLOAD_ENABLED=true \
@@ -96,9 +132,15 @@ RUN rm -rf var/cache/* var/log/* \
 COPY docker/entrypoint.sh /usr/local/bin/monad-entrypoint
 RUN chmod +x /usr/local/bin/monad-entrypoint
 
-EXPOSE 8000
+# FastCGI, not HTTP. The host nginx is the only client (127.0.0.1:9084 on the host).
+EXPOSE 9000
 
+# The same /api/health request the host nginx would make, sent as FastCGI by cgi-fcgi. It proves
+# FPM, the kernel and Postgres in one probe, as the old HTTP curl did; FPM's own ping would prove
+# only the first. /api/health answers 503 on a database fault, which fails the grep.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:8000/api/health || exit 1
+    CMD SCRIPT_FILENAME=/app/public/index.php SCRIPT_NAME=/index.php REQUEST_METHOD=GET \
+        REQUEST_URI=/api/health QUERY_STRING= cgi-fcgi -bind -connect 127.0.0.1:9000 \
+        | grep -q '"status":"healthy"' || exit 1
 
 ENTRYPOINT ["/usr/local/bin/monad-entrypoint"]

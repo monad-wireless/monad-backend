@@ -22,6 +22,23 @@ final class BetaSignupLinker
     {
     }
 
+    /**
+     * Whether an operator has invited this account's email from the onboarding desk.
+     *
+     * Beta access is invitation only, so this is the approval: POST /api/auth/register activates
+     * an account at once when it is true and leaves it PENDING otherwise. It must be asked BEFORE
+     * link(), which moves the signup on to `registered`.
+     */
+    public function isInvited(User $user): bool
+    {
+        $email = $user->getEmail();
+        if ($email === null || trim($email) === '') {
+            return false;
+        }
+
+        return $this->signups->findByEmail($email)?->getStatus() === BetaSignupStatus::INVITED;
+    }
+
     public function link(User $user, ?\DateTimeImmutable $now = null): ?BetaSignup
     {
         $email = $user->getEmail();

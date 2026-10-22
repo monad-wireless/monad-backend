@@ -59,7 +59,18 @@ services:
       postgres:
         condition: service_healthy
     working_dir: /var/www/html
-    command: sh -c "composer install --no-interaction && (php bin/console lexik:jwt:generate-keypair --skip-if-exists || true) && php -S 0.0.0.0:8000 -t public"
+    # The image's ENTRYPOINT is the production boot (migrate, export public/, exec php-fpm) and it
+    # ignores its arguments, so without this override `command` never ran and the container served
+    # FastCGI on 9000 behind a port map to 8000. Same override as `worker` below.
+    entrypoint: ["sh", "-c"]
+    command: ["composer install --no-interaction && (php bin/console lexik:jwt:generate-keypair --skip-if-exists || true) && exec php -S 0.0.0.0:8000 -t public"]
+    # The image's HEALTHCHECK speaks FastCGI to php-fpm on 9000, which does not run here.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/api/health | grep -q '\"status\":\"healthy\"'"]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
 
   # IP-157 — the Messenger worker (push sends over the `async` Doctrine transport, and the
   # scheduler that runs app:notifications:dispatch-due every minute). Same build, same
@@ -85,6 +96,9 @@ services:
     working_dir: /var/www/html
     entrypoint: ["sh", "-c"]
     command: ["until [ -f vendor/autoload.php ]; do sleep 2; done; exec php bin/console messenger:consume scheduler_default async --time-limit=3600 --memory-limit=256M"]
+    # A worker serves nothing, so the image's FastCGI probe could only ever report it unhealthy.
+    healthcheck:
+      disable: true
 
 volumes:
   postgres_data:

@@ -9,6 +9,8 @@ use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\ChoiceFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
@@ -57,7 +59,15 @@ class UserCrudController extends AbstractCrudController
             ->setEntityLabelInPlural('Users')
             ->setDefaultSort(['createdAt' => 'DESC'])
             ->setSearchFields(['email', 'name'])
-            ->setHelp('index', 'Roles: every account has ROLE_USER implicitly. ROLE_SUPERADMIN is what grants access to this interface.');
+            ->setHelp('index', 'Roles: every account has ROLE_USER implicitly. ROLE_SUPERADMIN is what grants access to this interface. Approval: an app registration whose email was not invited from the onboarding desk is Pending and cannot sign in. Filter by Status = Pending, then set Active to approve.');
+    }
+
+    public function configureFilters(Filters $filters): Filters
+    {
+        return $filters->add(ChoiceFilter::new('status')->setChoices(array_combine(
+            array_map(static fn (UserStatus $s) => ucfirst($s->value), UserStatus::cases()),
+            UserStatus::cases(),
+        )));
     }
 
     public function configureActions(Actions $actions): Actions

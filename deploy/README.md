@@ -2,20 +2,27 @@
 
 Target: `api.monad.dubec.dev` on the project host (Hetzner CCX33), alongside the rest of the lab on
 the shared external `monad` docker network. TLS is terminated by the host nginx that already serves
-`monad.dubec.dev`; the container publishes on **`127.0.0.1:8084`** only — not 8080, which Headscale's
-control server already occupies. DNS for `api.monad.dubec.dev` already resolves to the host.
+`monad.dubec.dev`. The container is PHP-FPM from the official `php` image and publishes FastCGI on
+**`127.0.0.1:9084`** only. The host nginx serves the API over HTTP on **`127.0.0.1:8084`** (not
+8080, which Headscale's control server already occupies): static files from
+`/var/www/monad-api-public`, which the entrypoint refills from the image's `public/` on every
+boot, and everything else through FastCGI. DNS for `api.monad.dubec.dev` already resolves to the
+host. In production Ansible (`roles/monad_api` in monad-knowledge) does all of this; the steps
+below are the manual equivalent.
 
 ## Once, on the host
 
 ```bash
 docker network create monad          # already exists if the lab stack is up
+mkdir -p /var/www/monad-api-public   # public/ export, readable by nginx
 cp deploy/nginx/api.monad.dubec.dev.conf /etc/nginx/sites-available/
 ln -s /etc/nginx/sites-available/api.monad.dubec.dev.conf /etc/nginx/sites-enabled/
 certbot --nginx -d api.monad.dubec.dev
 ```
 
 Create `.env` next to `docker-compose.deploy.yml` (gitignored) with `POSTGRES_*`, `APP_SECRET`,
-`JWT_PASSPHRASE`, and the `HETZNER_S3_*` values for the project's bucket. Then author
+`JWT_PASSPHRASE`, `PUBLIC_EXPORT_HOST_DIR=/var/www/monad-api-public`, and the `HETZNER_S3_*`
+values for the project's bucket. Then author
 `backend/monad-backend/config/lab/lab.json` from `lab.example.json` — the API serves an empty
 bundle without it, and phones will have no collector to talk to.
 

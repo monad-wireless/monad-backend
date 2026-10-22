@@ -25,6 +25,8 @@ class ErrorCode
     public const AUTH_UNAUTHORIZED = 'AUTH_006';
     public const AUTH_EMAIL_ALREADY_EXISTS = 'AUTH_007';
     public const AUTH_ACCOUNT_DELETED = 'AUTH_008';
+    public const AUTH_ACCOUNT_PENDING = 'AUTH_009';
+    public const AUTH_CURRENT_PASSWORD_WRONG = 'AUTH_010';
 
     // Validation Errors (100-199)
     public const VALIDATION_EMAIL_REQUIRED = 'VALIDATION_100';
@@ -88,6 +90,8 @@ class ErrorCode
             self::AUTH_UNAUTHORIZED => 'Authentication required',
             self::AUTH_EMAIL_ALREADY_EXISTS => 'Email address already registered',
             self::AUTH_ACCOUNT_DELETED => 'Account has been deleted',
+            self::AUTH_ACCOUNT_PENDING => 'Account is waiting for approval',
+            self::AUTH_CURRENT_PASSWORD_WRONG => 'Current password is incorrect',
 
             self::VALIDATION_EMAIL_REQUIRED => 'Email address is required',
             self::VALIDATION_EMAIL_INVALID => 'Email address format is invalid',

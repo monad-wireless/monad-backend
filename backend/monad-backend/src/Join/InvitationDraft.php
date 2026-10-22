@@ -34,6 +34,8 @@ final class InvitationDraft
                 BetaPlatform::UNSURE => 'iPhone alebo Android',
             },
             'privacy_url' => $privacyUrl,
+            // Registration activates at once only for this address (BetaSignupLinker::isInvited).
+            'recipient_email' => $signup->getEmail(),
             'sender_name' => $sender->getName() ?: $sender->getEmail(),
             'sender_email' => $sender->getEmail(),
         ];

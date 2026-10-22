@@ -1,5 +1,5 @@
 #!/bin/sh
-# Container entrypoint: bring the instance to a serviceable state, then hand off to FrankenPHP.
+# Container entrypoint: bring the instance to a serviceable state, then hand off to PHP-FPM.
 #
 # Each step is idempotent and each failure is loud. A container that starts but cannot reach its
 # database, or that serves with a stale cache, is worse than one that refuses to start — the first
@@ -13,8 +13,10 @@ echo "[entrypoint] APP_ENV=${APP_ENV:-prod} OTEL_SERVICE_NAME=${OTEL_SERVICE_NAM
 if [ ! -f config/jwt/private.pem ]; then
     echo "[entrypoint] generating JWT keypair (first boot)"
     php bin/console lexik:jwt:generate-keypair --skip-if-exists --no-interaction
-    chown -R www-data:www-data config/jwt
 fi
+# On every boot, not only the first: PHP-FPM workers run as www-data, and a keypair generated
+# while the server ran as root (FrankenPHP, before 2026-10-22) may still be root-only in the volume.
+chown -R www-data:www-data config/jwt
 
 # Wait for Postgres. compose declares depends_on: service_healthy, but a manual `docker run`
 # does not, and migrations against a not-yet-listening database fail in a way that looks like a
@@ -56,5 +58,19 @@ else
     echo "[entrypoint] WARNING: no config/lab/lab.json — /api/lab/config will serve an empty bundle"
 fi
 
-echo "[entrypoint] starting FrankenPHP on ${SERVER_NAME:-:8000}"
-exec frankenphp run --config /etc/caddy/Caddyfile
+# Publish public/ to the host. FPM executes PHP and nothing else, so the host nginx serves the
+# static files (bundles from assets:install above, admin.css, vendor/) from a directory it can
+# read. The deploy compose bind-mounts that directory here. Copied on every boot, after
+# assets:install, so an image update or a new bundle reaches the host with the container that
+# ships it. Old files are removed first: a file deleted from the image must stop being served.
+# No mount (development compose, a bare `docker run`) means nothing to export.
+PUBLIC_EXPORT_DIR="${PUBLIC_EXPORT_DIR:-/app/public-export}"
+if [ -d "$PUBLIC_EXPORT_DIR" ]; then
+    find "$PUBLIC_EXPORT_DIR" -mindepth 1 -delete
+    cp -a public/. "$PUBLIC_EXPORT_DIR"/
+    chmod -R a+rX "$PUBLIC_EXPORT_DIR"
+    echo "[entrypoint] exported public/ to $PUBLIC_EXPORT_DIR"
+fi
+
+echo "[entrypoint] starting PHP-FPM (FastCGI on :9000)"
+exec php-fpm
