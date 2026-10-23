@@ -193,6 +193,39 @@ class LabSessionRepository extends ServiceEntityRepository
     }
 
     /**
+     * Take a recording out of the study (Version20261023120000). SQL because the entity is
+     * read-only; the guard in the WHERE clause is what makes a double click a no-op rather than a
+     * second timestamp. `updated_at` is left alone: it records upload activity, and a quarantine is
+     * an annotation, not an upload.
+     *
+     * @throws \InvalidArgumentException on a blank reason
+     * @throws \LogicException when there is no such session or it is already quarantined
+     */
+    public function quarantine(string $sessionId, string $reason, ?\DateTimeImmutable $at = null): void
+    {
+        $reason = LabSession::normaliseQuarantineReason($reason);
+        $changed = $this->getEntityManager()->getConnection()->executeStatement(
+            'UPDATE lab_sessions SET quarantined_at = :at, quarantine_reason = :reason WHERE id = :id AND quarantined_at IS NULL',
+            ['id' => $sessionId, 'reason' => $reason, 'at' => ($at ?? new \DateTimeImmutable())->format('Y-m-d H:i:s')],
+        );
+        if ($changed === 0) {
+            throw new \LogicException('This recording is unknown or already quarantined.');
+        }
+    }
+
+    /** @throws \LogicException when there is no such session or it is not quarantined */
+    public function release(string $sessionId): void
+    {
+        $changed = $this->getEntityManager()->getConnection()->executeStatement(
+            'UPDATE lab_sessions SET quarantined_at = NULL, quarantine_reason = NULL WHERE id = :id AND quarantined_at IS NOT NULL',
+            ['id' => $sessionId],
+        );
+        if ($changed === 0) {
+            throw new \LogicException('This recording is unknown or not quarantined.');
+        }
+    }
+
+    /**
      * Newest first, with optional filters. The admin's register page.
      *
      * @param array{quest?: string|null, platform?: string|null, complete?: bool|null, participant?: string|null} $filters

@@ -20,6 +20,8 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\HasLifecycleCallbacks]
 class QuestEnrollment
 {
+    use QuarantineTrait;
+
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
     private ?Uuid $id = null;
@@ -377,4 +379,33 @@ class QuestEnrollment
         return $this;
     }
 
+    /**
+     * Take this run out of the study. Nothing it recorded changes; see QuarantineTrait.
+     *
+     * @throws \InvalidArgumentException on a blank reason
+     * @throws \LogicException when already quarantined (a double click, or two tabs)
+     */
+    public function quarantine(string $reason, ?\DateTimeImmutable $at = null): static
+    {
+        $reason = self::normaliseQuarantineReason($reason);
+        if ($this->quarantinedAt !== null) {
+            throw new \LogicException('This run is already quarantined.');
+        }
+        $this->quarantinedAt = $at ?? new \DateTimeImmutable();
+        $this->quarantineReason = $reason;
+
+        return $this;
+    }
+
+    /** @throws \LogicException when the run is not quarantined */
+    public function release(): static
+    {
+        if ($this->quarantinedAt === null) {
+            throw new \LogicException('This run is not quarantined.');
+        }
+        $this->quarantinedAt = null;
+        $this->quarantineReason = null;
+
+        return $this;
+    }
 }

@@ -38,6 +38,8 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Index(name: 'lab_session_completed_idx', columns: ['completed_at'])]
 class LabSession
 {
+    use QuarantineTrait;
+
     /** The app's session id (`X-Session-Id`), after the same sanitiser the S3 key uses. */
     #[ORM\Id]
     #[ORM\Column(length: 128)]

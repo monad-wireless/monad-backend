@@ -19,6 +19,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Filter\BooleanFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Filter\ChoiceFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Filter\DateTimeFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Filter\EntityFilter;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\NullFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Filter\TextFilter;
 
 /**
@@ -67,7 +68,8 @@ class LabSessionCrudController extends AbstractCrudController
             ->add(ChoiceFilter::new('platform')->setChoices(['iOS' => 'ios', 'Android' => 'android']))
             ->add(BooleanFilter::new('completedAt', 'Complete'))
             ->add(TextFilter::new('participantId', 'Participant'))
-            ->add(DateTimeFilter::new('firstArtefactAt', 'Uploaded'));
+            ->add(DateTimeFilter::new('firstArtefactAt', 'Uploaded'))
+            ->add(NullFilter::new('quarantinedAt', 'Quarantined')->setChoiceLabels('In the study', 'Quarantined'));
     }
 
     public function configureActions(Actions $actions): Actions
@@ -105,6 +107,9 @@ class LabSessionCrudController extends AbstractCrudController
         yield $this->state(BooleanField::new('complete', 'Complete')->renderAsSwitch(false), 'complete', 'no sidecar');
         yield TextField::new('interruptedReason', 'Interrupted')
             ->formatValue(static fn ($v, LabSession $s) => $s->getInterruptedReason() ?? '');
+        // Set on the session's page (RunQuarantineController). The recording's own flag only; one
+        // whose enrollment is quarantined says so on its page and is left out by lab_runs.
+        yield DateTimeField::new('quarantinedAt', 'Quarantined');
     }
 
     private static function bytes(int $bytes): string

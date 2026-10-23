@@ -15,6 +15,14 @@
         </span>
     </div>
 
+    {{ include('admin/_quarantine.html.twig', {
+        subject: session,
+        quarantine_path: path('admin_recording_session_quarantine', {id: session.id}),
+        release_path: path('admin_recording_session_release', {id: session.id}),
+        noun: 'recording',
+        inherited: session.enrollment,
+    }) }}
+
     <div class="row">
         <div class="col-lg-6">
             <div class="card mb-3">

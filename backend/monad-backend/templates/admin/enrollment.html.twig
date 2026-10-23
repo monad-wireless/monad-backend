@@ -14,6 +14,13 @@
         <span><span class="k">Points</span>{{ enrollment.pointsAwarded is null ? '—' : enrollment.pointsAwarded|number_format(1) }}{% if enrollment.awardedAt %} frozen {{ enrollment.awardedAt|clock }}{% endif %}</span>
     </div>
 
+    {{ include('admin/_quarantine.html.twig', {
+        subject: enrollment,
+        quarantine_path: path('admin_enrollment_quarantine', {id: enrollment.id}),
+        release_path: path('admin_enrollment_release', {id: enrollment.id}),
+        noun: 'run',
+    }) }}
+
     <div class="row">
         <div class="col-lg-6">
             <div class="card mb-3">

@@ -7,7 +7,9 @@ use App\Enum\QuestEnrollmentStatus;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use EasyCorp\Bundle\EasyAdminBundle\Filter\NullFilter;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
@@ -46,11 +48,19 @@ class QuestEnrollmentCrudController extends AbstractCrudController
         $open = Action::new('open', 'Open', 'fa fa-folder-open')
             ->linkToRoute('admin_enrollment', static fn (QuestEnrollment $e) => ['id' => $e->getId()->toRfc4122()]);
 
+        // No DELETE (2026-10-23): it cascaded into the run's step completions and left its
+        // recording, scans and artefacts behind unmarked. Taking a run out of the study is the
+        // Quarantine button on the run's page (RunQuarantineController), which deletes nothing.
         return $actions
             ->add(Crud::PAGE_INDEX, $open)
             ->add(Crud::PAGE_DETAIL, $open)
             ->add(Crud::PAGE_INDEX, Action::DETAIL)
-            ->disable(Action::NEW);
+            ->disable(Action::NEW, Action::DELETE, Action::BATCH_DELETE);
+    }
+
+    public function configureFilters(Filters $filters): Filters
+    {
+        return $filters->add(NullFilter::new('quarantinedAt', 'Quarantined')->setChoiceLabels('In the study', 'Quarantined'));
     }
 
     public function configureFields(string $pageName): iterable
@@ -85,6 +95,9 @@ class QuestEnrollmentCrudController extends AbstractCrudController
         yield TextField::new('dataPath', 'Data path')->setRequired(false)->hideOnIndex();
         yield DateTimeField::new('completedAt', 'Completed')->setRequired(false);
         yield DateTimeField::new('createdAt', 'Created')->hideOnForm();
+        // Read here, written only by RunQuarantineController: never a form field.
+        yield DateTimeField::new('quarantinedAt', 'Quarantined')->hideOnForm();
+        yield TextField::new('quarantineReason', 'Quarantine reason')->onlyOnDetail();
         yield AssociationField::new('stepCompletions', 'Step completions')
             ->formatValue(static fn ($value, $entity) => $entity->getStepCompletions()->count() . ' completion(s)')
             ->onlyOnDetail();

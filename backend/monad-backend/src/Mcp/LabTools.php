@@ -1115,6 +1115,8 @@ class LabTools
             'recording_session_id' => $id,
             'known' => $session !== null,
             'complete' => $session?->isComplete() ?? false,
+            // Out of the study when the recording or its enrollment is quarantined (lab_runs rule).
+            'quarantined' => ($session?->isQuarantined() ?? false) || ($session?->getEnrollment()?->isQuarantined() ?? false),
             'sealed' => $accepted !== null,
             'accepted_manifest_sha256' => $accepted?->getManifestSha256(),
             'seal_attempts' => array_map(
@@ -1142,9 +1144,12 @@ class LabTools
             . 'completed_at, interrupted reason, whether an evidence manifest is sealed, and how many sweep '
             . 'receipts exist. Filter by quest name and by first upload on or after `since` (YYYY-MM-DD, '
             . 'Europe/Bratislava). A register read, never a count: the counts live in the uploaded events '
-            . '(monad-knowledge lab_counting_runs / lab_reference_inspect).',
+            . '(monad-knowledge lab_counting_runs / lab_reference_inspect). QUARANTINE: a run whose '
+            . 'recording or whose enrollment an operator quarantined is out of the study and is left out '
+            . 'by default; `quarantined_hidden` says how many. `include_quarantined: true` returns them '
+            . 'too, each with `quarantine` {at, reason, by: recording|enrollment}.',
     )]
-    public function runs(?string $quest = null, ?string $since = null, int $limit = 100): array
+    public function runs(?string $quest = null, ?string $since = null, int $limit = 100, bool $include_quarantined = false): array
     {
         $where = [];
         $params = ['n' => max(1, min($limit, 500))];
@@ -1160,19 +1165,43 @@ class LabTools
             $where[] = 's.first_artefact_at >= :since';
             $params['since'] = $day->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
         }
+        // A run is out of the study when its recording OR its enrollment is quarantined.
+        $from = ' FROM lab_sessions s LEFT JOIN quests q ON q.id = s.quest_id'
+            . ' LEFT JOIN quest_enrollments e ON e.id = s.enrollment_id';
+        $quarantined = '(s.quarantined_at IS NOT NULL OR e.quarantined_at IS NOT NULL)';
+        $connection = $this->entityManager->getConnection();
+        $hidden = 0;
+        if (!$include_quarantined) {
+            $countParams = $params;
+            unset($countParams['n']);
+            $hidden = (int) $connection->fetchOne(
+                'SELECT COUNT(*)' . $from . ' WHERE ' . implode(' AND ', [...$where, $quarantined]),
+                $countParams,
+            );
+            $where[] = 'NOT ' . $quarantined;
+        }
         $sql = 'SELECT s.id, s.participant_id, q.name AS quest, s.enrollment_id, s.started_wall_ms, s.ended_wall_ms,'
             . ' s.first_artefact_at, s.completed_at, s.interrupted_reason,'
+            . ' s.quarantined_at AS s_q_at, s.quarantine_reason AS s_q_reason,'
+            . ' e.quarantined_at AS e_q_at, e.quarantine_reason AS e_q_reason,'
             . ' EXISTS (SELECT 1 FROM lab_evidence_manifests m WHERE m.recording_session_id = s.id'
             . "   AND m.state = 'accepted') AS sealed,"
             . ' (SELECT COUNT(*) FROM lab_reference_receipts r WHERE r.recording_session_id = s.id) AS receipts'
-            . ' FROM lab_sessions s LEFT JOIN quests q ON q.id = s.quest_id'
+            . $from
             . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
             . ' ORDER BY s.first_artefact_at DESC LIMIT :n';
-        $rows = $this->entityManager->getConnection()->fetchAllAssociative($sql, $params, ['n' => \Doctrine\DBAL\ParameterType::INTEGER]);
+        $rows = $connection->fetchAllAssociative($sql, $params, ['n' => \Doctrine\DBAL\ParameterType::INTEGER]);
         $iso = static fn ($ms): ?string => $ms === null ? null
             : (new \DateTimeImmutable('@' . intdiv((int) $ms, 1000)))->format(\DateTimeInterface::ATOM);
+        // The recording's own flag first: it is the more specific statement.
+        $quarantine = static fn (array $r): ?array => match (true) {
+            $r['s_q_at'] !== null => ['at' => $r['s_q_at'], 'reason' => $r['s_q_reason'], 'by' => 'recording'],
+            $r['e_q_at'] !== null => ['at' => $r['e_q_at'], 'reason' => $r['e_q_reason'], 'by' => 'enrollment'],
+            default => null,
+        };
 
         return [
+            'quarantined_hidden' => $hidden,
             'runs' => array_map(static fn (array $r): array => [
                 'recording_session_id' => $r['id'],
                 'source' => sprintf('app:%s/%s', $r['participant_id'], $r['id']),
@@ -1185,6 +1214,7 @@ class LabTools
                 'interrupted_reason' => $r['interrupted_reason'],
                 'sealed' => (bool) $r['sealed'],
                 'sweep_receipts' => (int) $r['receipts'],
+                'quarantine' => $quarantine($r),
             ], $rows),
             'count' => count($rows),
         ];
