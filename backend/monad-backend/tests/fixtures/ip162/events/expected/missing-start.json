@@ -1,0 +1,38 @@
+{
+  "fixture": "events/invalid/missing-start.json",
+  "projection": {
+    "sweep_id": "5e000000-0000-4000-8000-000000000001",
+    "phase": "not_started",
+    "state": "invalid",
+    "events_seen": 1,
+    "events_accepted": 0,
+    "duplicates_ignored": 0,
+    "identity": {},
+    "start_mono_ns": null,
+    "end_mono_ns": null,
+    "checkpoints": [],
+    "corrections": 0,
+    "final_count": null,
+    "coverage": null,
+    "coverage_reason": null,
+    "occupancy_stability": null,
+    "activity": null,
+    "duplicate_risk": null,
+    "observer_excluded": null,
+    "observers_in_area": null,
+    "abort_reason": null,
+    "on_air_events": {
+      "true": 0,
+      "false": 0,
+      "unknown": 0
+    },
+    "errors": [
+      {
+        "code": "start_expected",
+        "sequence": 1,
+        "event_id": "e0000000-0000-4000-8000-000000000001",
+        "detail": "first event must be start, got checkpoint"
+      }
+    ]
+  }
+}

@@ -25,6 +25,10 @@ class JWTAuthenticationSuccessListener
             throw new AuthException(ErrorCode::AUTH_ACCOUNT_DELETED, Response::HTTP_FORBIDDEN);
         }
 
+        if ($user->getStatus() === UserStatus::PENDING) {
+            throw new AuthException(ErrorCode::AUTH_ACCOUNT_PENDING, Response::HTTP_FORBIDDEN);
+        }
+
         if ($user->getStatus() === UserStatus::BANNED) {
             throw new AuthException(ErrorCode::AUTH_ACCOUNT_DISABLED, Response::HTTP_FORBIDDEN);
         }

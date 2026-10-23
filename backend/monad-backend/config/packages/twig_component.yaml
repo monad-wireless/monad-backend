@@ -1,0 +1,8 @@
+# Twig Components is here for EasyAdmin, not for this application: EasyAdmin 4.29 renders its
+# layout, menu, flash messages and action menus as Twig components and requires the bundle.
+# This project defines no components of its own, so `defaults` is empty. The two keys are set
+# explicitly because symfony/ux-twig-component 2.13+ emits a deprecation when either is absent,
+# and the test suite fails on deprecations.
+twig_component:
+    anonymous_template_directory: 'components/'
+    defaults: {}

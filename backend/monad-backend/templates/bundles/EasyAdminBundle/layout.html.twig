@@ -1,0 +1,246 @@
+{# @var ea \EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext #}
+{#
+  THE SHELL (IP-157 Phase 8). This replaces EasyAdmin's layout rather than restyling it.
+
+  The vendor layout draws a collapsible sidebar with sections, a search box, a settings
+  dropdown and a `⋯` menu per row; that is the generic admin the 2026-09-17 tour rejected.
+  What is kept is every BLOCK a CRUD template fills, so `crud/index`, `crud/detail`,
+  `crud/new`, `crud/edit` and `page/content` render unchanged inside this skeleton:
+
+      page_title · head_metas · head_stylesheets · configured_stylesheets · head_favicon
+      head_javascript · importmap · configured_javascripts · configured_head_contents
+      body · body_attr · body_id · body_class · flash_messages · wrapper_wrapper · wrapper
+      main_content_wrapper · content · content_header_wrapper · content_header
+      content_title · content_help · page_actions_wrapper · page_actions · main
+      content_footer_wrapper · content_footer · body_javascript · configured_body_contents
+
+  Three vendor blocks are deliberately EMPTY here: `javascript_page_layout` (it drives the
+  resizable sidebar this layout does not have), `javascript_page_color_scheme` (there is one
+  scheme, light, and it is the site's paper) and `search_wrapper` (per-lane pages carry their
+  own filters; the CRUD search box was the only user and it went with the `⋯` menu).
+  EasyAdmin's `app.js` and `app.css` DO stay loaded: the CRUD form widgets, the delete
+  confirmation modal and the filter panel are theirs, and admin.css reconciles them.
+
+  `ea` is required: every page under /admin runs through the EasyAdmin context, including the
+  four bespoke desks, because they are `#[AdminRoute]` controllers.
+
+  Three slots a page fills beyond EasyAdmin's own:
+    - `breadcrumb`  — the line above the title. Empty on a top-level page.
+    - `page_actions` — EasyAdmin's block, rendered in the top bar rather than under the title.
+    - `mc_active`   — a rail entry's route name, when longest-prefix matching would miss.
+#}
+{% set ea = ea() %}
+{% import 'admin/_ui.html.twig' as ui %}
+{% trans_default_domain ea.i18n.translationDomain %}
+
+{% set _path = app.request.pathinfo %}
+{% set _menu = ea.mainMenu.items %}
+
+{#- The active rail entry. EasyAdmin's own isSelected() only knows the routes it generated,
+    so the fallback is longest URL-prefix wins: /admin/lab/quests beats /admin/lab, and
+    /admin/people/notifications beats /admin/people. The dashboard is exact-match only, or it
+    would claim every page. A CRUD page has no bespoke URL to match, so it is placed by the
+    entity it edits — which is where the IA puts it: Device under Lab, User under Settings,
+    the run entities under Runs. -#}
+{% set _crud_fqcn = ea.crud is not null ? ea.crud.entityFqcn : null %}
+{% set _forced = mc_active|default(
+    _crud_fqcn is null ? null : (
+        _crud_fqcn == 'App\\Entity\\Device' ? 'admin_lab'
+        : (_crud_fqcn == 'App\\Entity\\User' ? 'admin_people' : 'admin_runs')
+    )
+) %}
+{% set _best = '' %}
+{% if _forced is null %}
+    {% for item in _menu %}
+        {% set _u = (item.linkUrl ?? '')|replace({(app.request.schemeAndHttpHost): ''})|split('?')|first %}
+        {% if _u != '' and _u != '/admin' and (_path == _u or _path starts with _u ~ '/') and _u|length > _best|length %}
+            {% set _best = _u %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
+
+<!DOCTYPE html>
+<html lang="{{ ea.i18n.htmlLocale }}" dir="{{ ea.i18n.textDirection }}" data-turbo="false">
+<head>
+    {% block head_metas %}
+        <meta charset="utf-8">
+        <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noodp, noimageindex, notranslate, nocache">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        {% guard function csp_nonce %}
+            <meta name="csp-nonce" content="{{ csp_nonce('style') }}">
+        {% endguard %}
+    {% endblock head_metas %}
+
+    {% set page_title_block_output %}{% block page_title %}{{ block('content_title') }}{% endblock %}{% endset %}
+    <title>{{ page_title_block_output|striptags|raw|default('MonadCount') }} · MonadCount</title>
+
+    {% block head_stylesheets %}
+        {% guard function csp_nonce %}
+            <link rel="stylesheet" href="{{ asset('app.css', ea.assets.defaultAssetPackageName) }}" nonce="{{ csp_nonce('style') }}">
+        {% else %}
+            <link rel="stylesheet" href="{{ asset('app.css', ea.assets.defaultAssetPackageName) }}">
+        {% endguard %}
+    {% endblock %}
+
+    {% block configured_stylesheets %}
+        {{ include('@EasyAdmin/includes/_css_assets.html.twig', {assets: ea.assets.cssAssets ?? []}, with_context: false) }}
+        {{ include('@EasyAdmin/includes/_encore_link_tags.html.twig', {assets: ea.assets.webpackEncoreAssets ?? []}, with_context: false) }}
+    {% endblock %}
+
+    {% block head_favicon %}
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+        <link rel="alternate icon" href="/favicon.ico" sizes="32x32">
+    {% endblock %}
+
+    {% block head_javascript %}
+        {% guard function csp_nonce %}
+            <script src="{{ asset('app.js', ea.assets.defaultAssetPackageName) }}" nonce="{{ csp_nonce('script') }}"></script>
+        {% else %}
+            <script src="{{ asset('app.js', ea.assets.defaultAssetPackageName) }}"></script>
+        {% endguard %}
+
+        {% block importmap %}
+            {{ include('@EasyAdmin/includes/_importmap.html.twig', {assets: ea.assets.assetMapperAssets ?? []}, with_context: false) }}
+        {% endblock %}
+    {% endblock head_javascript %}
+
+    {% block configured_javascripts %}
+        {{ include('@EasyAdmin/includes/_js_assets.html.twig', {assets: ea.assets.jsAssets ?? []}, with_context: false) }}
+        {{ include('@EasyAdmin/includes/_encore_script_tags.html.twig', {assets: ea.assets.webpackEncoreAssets ?? []}, with_context: false) }}
+    {% endblock %}
+
+    {% block configured_head_contents %}
+        {% for htmlContent in ea.assets.headContents ?? [] %}
+            {{ htmlContent|raw }}
+        {% endfor %}
+    {% endblock %}
+</head>
+
+{% block body %}
+<body {% block body_attr %}{% endblock %}
+      id="{% block body_id %}{% endblock %}"
+      class="ea {% block body_class %}{% endblock %}"
+      data-ea-content-width="normal"
+      data-ea-sidebar-width="normal"
+      data-ea-dark-scheme-is-enabled="false"
+      data-ea-default-color-scheme="light"
+      data-ea-icon-set="{{ ea.assets.iconSet }}"
+      data-ea-icon-prefix="{{ ea.assets.defaultIconPrefix }}">
+
+{# The vendor's sidebar-resize and colour-scheme scripts have nothing to act on here. #}
+{% block javascript_page_layout %}{% endblock javascript_page_layout %}
+{% block javascript_page_color_scheme %}{% endblock javascript_page_color_scheme %}
+
+{% block wrapper_wrapper %}
+<a class="mc-skip" href="#main">Skip to content</a>
+<div class="mc-shell">
+    {% block wrapper %}
+    <aside class="mc-rail">
+        {% block sidebar %}
+            <a class="mc-wordmark" href="{{ path(ea.dashboardRouteName) }}">
+                <b>MonadCount</b>
+                <small>lab console</small>
+                <span class="mc-tone" aria-hidden="true"><i></i><i></i></span>
+            </a>
+
+            {% block main_menu_wrapper %}
+            <nav class="mc-nav" aria-label="Sections">
+                {% for item in _menu %}
+                    {% if not item.isMenuSection %}
+                        {% set _u = (item.linkUrl ?? '')|replace({(app.request.schemeAndHttpHost): ''})|split('?')|first %}
+                        {% set _active = _forced is not null
+                            ? (item.routeName == _forced)
+                            : (_best != '' ? _u == _best : (_u == '/admin' and _path == '/admin')) %}
+                        <a href="{{ item.linkUrl }}" class="{{ _active ? 'is-active' }}"{{ _active ? ' aria-current="page"' : '' }}>{{ item.label|trans|raw }}</a>
+                    {% endif %}
+                {% endfor %}
+            </nav>
+            {% endblock main_menu_wrapper %}
+
+            <div class="mc-rail-foot">
+                Local time<br><strong>{{ admin_timezone() }}</strong>
+            </div>
+        {% endblock sidebar %}
+    </aside>
+
+    {% block main_content_wrapper %}
+    <div class="mc-main">
+        <header class="mc-top">
+            <div class="mc-top-title">
+                <div class="mc-crumb">{% block breadcrumb %}{% endblock %}</div>
+                {% block content_header_wrapper %}
+                    {% set crud_help_message = ea.crud.helpMessage ?? null %}
+                    {% set has_help_message = crud_help_message is not same as(false) and crud_help_message is not null and crud_help_message is not same as('') %}
+                    {% block content_header %}
+                        <h1>{% block content_title %}{% endblock %}</h1>
+                        {% block content_help %}
+                            {% if has_help_message %}
+                                <p class="ui-note">{{ ea.crud.helpMessage|trans|raw }}</p>
+                            {% endif %}
+                        {% endblock %}
+                    {% endblock content_header %}
+                {% endblock content_header_wrapper %}
+            </div>
+
+            <div class="mc-top-right">
+                {% block page_actions_wrapper %}
+                    <div class="page-actions">{% block page_actions %}{% endblock %}</div>
+                {% endblock %}
+
+                <details class="mc-user">
+                    <summary>{{ ea.user is null ? 'not signed in' : (ea.user.email ?? ea.userMenu.name) }}</summary>
+                    <div class="mc-user-menu">
+                        <div class="who">
+                            <b>{{ ea.user is null ? 'Anonymous' : (ea.user.name ?: 'Operator') }}</b>
+                            <span>{{ ea.user is null ? '' : ea.user.email }}</span>
+                        </div>
+                        <a href="/api/doc" target="_blank" rel="noopener">API docs</a>
+                        <a href="{{ path('admin_logout') }}">Sign out</a>
+                    </div>
+                </details>
+            </div>
+        </header>
+
+        {% block flash_messages %}
+            <div class="mc-flash">{{ include(ea.templatePath('flash_messages')) }}</div>
+        {% endblock flash_messages %}
+
+        {% block content %}
+        <main class="mc-content">
+            <section id="main" class="content-body" tabindex="-1">
+                {% if ea.crud is not null and ea.crud.currentAction == 'index' %}
+                    <form method="get" class="ui-crud-search" role="search">
+                        {% for name, value in app.request.query.all %}
+                            {% if name not in ['query', 'page'] %}{{ ui.hidden_query(name, value) }}{% endif %}
+                        {% endfor %}
+                        <label for="crud-query">Search all records</label>
+                        <input id="crud-query" type="search" name="query" value="{{ app.request.query.get('query', '') }}" placeholder="Search records…">
+                        <button class="ui-btn ui-btn-primary" type="submit">Search</button>
+                    </form>
+                {% endif %}
+                {% block main %}{% endblock %}
+            </section>
+
+            {% block content_footer_wrapper %}
+                {% if block('content_footer') is not empty %}
+                    <section class="content-footer">{% block content_footer %}{% endblock %}</section>
+                {% endif %}
+            {% endblock %}
+        </main>
+        {% endblock content %}
+    </div>
+    {% endblock main_content_wrapper %}
+    {% endblock wrapper %}
+</div>
+{% endblock wrapper_wrapper %}
+
+{% block body_javascript %}{% endblock body_javascript %}
+
+{% block configured_body_contents %}
+    {% for htmlContent in ea.assets.bodyContents ?? [] %}
+        {{ htmlContent|raw }}
+    {% endfor %}
+{% endblock %}
+</body>
+{% endblock body %}
+</html>

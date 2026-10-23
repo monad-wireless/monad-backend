@@ -8,125 +8,72 @@
 </head>
 <body>
 <strong>Privacy Policy</strong>
-<p>This privacy policy applies to the Monad app (hereby referred to as "Application") for mobile devices that was created by Martin Vančo (hereby referred to as "Service Provider") as a Free service. This service is intended for use "AS IS".</p>
+<p>This policy applies to the Monad Scan app ("the App") for iOS and Android. The App is a research instrument for a doctoral study at the Faculty of Informatics and Information Technologies, Slovak University of Technology in Bratislava (FIIT STU). The study estimates how many people are in a room from Wi-Fi and Bluetooth signals. The researcher responsible for the App and for this policy is Jakub Dubec, FIIT STU, jakub.dubec@stuba.sk ("we").</p>
 
-<strong>Information Collection and Use</strong>
-<p>The Application collects information when you download and use it. This information may include:</p>
+<strong>Who the App is for</strong>
+<p>The App is for university students and staff who volunteer for the study. Access is by invitation. Taking part is voluntary, and you may stop at any time. The App is not directed at children.</p>
+
+<strong>Account data</strong>
 <ul>
-  <li>Your device's Internet Protocol address (e.g. IP address)</li>
-  <li>The operating system and platform you use on your mobile device</li>
-  <li>The time spent on the Application</li>
+  <li>Email address.</li>
+  <li>Name, if you give one.</li>
+  <li>Password, stored on our server only as a one-way hash.</li>
+  <li>Account status (for example, waiting for approval or active), and your notification preferences.</li>
+</ul>
+<p>We use the account to sign you in, to approve invited participants, to link your measurements to a pseudonym, and to send you study messages.</p>
+
+<strong>Measurement data from quests</strong>
+<p>When you take part in a quest, the App records and uploads:</p>
+<ul>
+  <li>The text of each QR marker you scan, with the time.</li>
+  <li>Step start and completion times, and skipped steps with the reason you give.</li>
+  <li>Counts of people that you enter yourself, when a step asks for one.</li>
+  <li>Bluetooth Low Energy (BLE) records: the identity frame your phone broadcasts during a quest, and the advertisements of nearby BLE devices that a quest step asks the App to find (device address, name, signal strength, advertised services and manufacturer data, with times).</li>
+  <li>Check-in and check-out scans for room counts. These carry an opaque participant pseudonym, never your email or name.</li>
+  <li>A description of your phone: an installation identifier that the App creates (a reinstall makes a new one), the platform, manufacturer, model, chip, operating system version and build, app version, and the phone's radio and sensor capabilities. We do not collect the platform's advertising or vendor identifiers.</li>
+</ul>
+<p>During a measurement walk, the App also records the phone's own movement through the room (its position and orientation relative to where the walk started) and, on phones with LiDAR, a 3D outline of the room's surfaces. The camera is used to compute that movement. No photos or video are saved or uploaded.</p>
+
+<strong>What the App does not collect</strong>
+<ul>
+  <li>Location. The App does not request or read your location on iOS or Android.</li>
+  <li>Photos, video or audio.</li>
+  <li>Advertising identifiers. The App contains no advertising.</li>
 </ul>
 
-<strong>Account Information</strong>
-<p>To use the Application, you are required to create an account. The following information is collected during registration and login:</p>
-<ul>
-  <li>Email address</li>
-  <li>Name (optional)</li>
-  <li>Password (stored securely on the server)</li>
-</ul>
-<p>This information is used for authentication, identifying your data submissions, and communicating important information about the Application.</p>
+<strong>Instrument health readings</strong>
+<p>While a quest records, the App sends health readings about the measurement itself (for example the Bluetooth broadcast rate, recording state, clock offset and walk tracking quality) to our own monitoring server. Each reading carries only the site, the platform and your participant pseudonym.</p>
 
-<strong>Bluetooth Low Energy (BLE) Data</strong>
-<p>The primary purpose of the Application is to collect Bluetooth Low Energy (BLE) sensor data during quest participation. The following BLE data is collected:</p>
-<ul>
-  <li>BLE device addresses (MAC addresses or platform identifiers)</li>
-  <li>Device names of detected BLE devices</li>
-  <li>Signal strength (RSSI) values</li>
-  <li>Manufacturer-specific data</li>
-  <li>Service UUIDs advertised by detected devices</li>
-  <li>Timestamps of each detected advertisement</li>
-</ul>
-<p>This data is stored locally on your device during quest participation and is uploaded to the Service Provider's servers upon quest completion. The data is used for research and analysis purposes.</p>
+<strong>Crash reports</strong>
+<p>The App uses Firebase Crashlytics (Google LLC) to report crashes. Crash reporting is on. The App does not yet offer a switch to turn it off. A crash report contains the device model, operating system version, app version and build, the stack trace and the app state at the moment of the crash. It also carries your participant pseudonym and the site, so that we can match a crash to a measurement session. It does not contain your email or name. See <a href="https://firebase.google.com/support/privacy" target="_blank">Firebase privacy information</a>.</p>
 
-<strong>Quest and Experiment Data</strong>
-<p>When you participate in quests, the Application collects:</p>
-<ul>
-  <li>Quest start and completion timestamps</li>
-  <li>Individual step completion status and timestamps</li>
-  <li>QR code scan results</li>
-  <li>Application version and platform information</li>
-  <li>Timezone information</li>
-</ul>
-<p>This metadata is uploaded alongside BLE data to the Service Provider's servers for research purposes.</p>
+<strong>Push notifications</strong>
+<p>The App uses Firebase Cloud Messaging (Google LLC) to send study messages. If you allow notifications, our server stores a push token for your device. Quest call-outs are off until you turn them on in the App. You can turn notifications off in the App or in your phone's settings.</p>
 
-<strong>Location Data</strong>
-<p>The Application requests location permission, which is used for the following purposes:</p>
-<ul>
-  <li>Enabling BLE scanning functionality (required by the Android operating system)</li>
-  <li>Supporting location-based quest features</li>
-</ul>
-<p>The Application does not continuously track your location in the background.</p>
+<strong>Where the data is stored</strong>
+<p>Account data and the measurement register are stored in a database on our server at api.monad.dubec.dev, hosted by Hetzner Online GmbH. Uploaded measurement files are stored in Hetzner Object Storage. Crash reports and push delivery are processed by Google LLC as described above.</p>
 
-<strong>Camera Data</strong>
-<p>The Application uses your device's camera solely for scanning QR codes during quest participation. No images or video are stored or transmitted. Only the decoded QR code content is processed locally to validate quest steps.</p>
+<strong>Who can see the data</strong>
+<p>Only the researcher and the administrators of the study's server can see account data. We do not sell data or share it for advertising. Published results use aggregated or pseudonymous data only. We may disclose data if the law requires it.</p>
 
-<strong>Wi-Fi Data</strong>
-<p>The Application may access Wi-Fi network information (such as network name and connection status) to support connectivity-related quest features. This data is used locally and is not transmitted to external servers.</p>
+<strong>Legal basis</strong>
+<p>We process your data on the basis of your consent to take part in the study (Article 6(1)(a) GDPR). You give it when you register and when you start a quest, and you can withdraw it at any time.</p>
 
-<strong>Crash Reporting (Firebase Crashlytics)</strong>
-<p>The Application uses Firebase Crashlytics, a service provided by Google LLC, to collect anonymous crash reports. Crash reporting is disabled by default and is only enabled after you explicitly agree to it during the onboarding process. When enabled, the following data may be collected:</p>
-<ul>
-  <li>Device model and hardware information</li>
-  <li>Operating system name and version</li>
-  <li>Application version and build number</li>
-  <li>Stack traces and error logs at the time of a crash</li>
-  <li>Application state and memory usage</li>
-</ul>
-<p>No personal data (such as email, name, or account information) is included in crash reports. This data is processed by Google LLC under their <a href="https://policies.google.com/privacy" target="_blank">Privacy Policy</a>.</p>
+<strong>Retention</strong>
+<p>We keep account data while your account exists. Pseudonymous measurement data is kept for the research study. [RETENTION PERIOD: to be set by the researcher before publication.]</p>
 
-<strong>Push Notifications (Firebase Cloud Messaging)</strong>
-<p>The Application uses Firebase Cloud Messaging (FCM), a service provided by Google LLC, to deliver push notifications. When you allow notifications, a unique device token is generated and stored on the Service Provider's servers to enable message delivery. This token does not contain personal information but is linked to your device. You can disable notifications at any time through your device settings.</p>
-
-<strong>Data Storage and Upload</strong>
-<p>Collected data is:</p>
-<ul>
-  <li>Stored locally on your device in a SQLite database during use</li>
-  <li>Uploaded to the Service Provider's servers (hosted at monad.martinvanco.sk) upon quest completion</li>
-  <li>Stored on the server for research and analysis purposes</li>
-</ul>
-<p>Local data related to completed quests is cleared from your device after successful upload.</p>
-
-<strong>Third Party Access</strong>
-<p>The Application uses the following third-party services that may collect and process data:</p>
-<ul>
-  <li><strong>Firebase Crashlytics (Google LLC)</strong> - Anonymous crash and error reporting. <a href="https://firebase.google.com/support/privacy" target="_blank">Firebase Privacy Information</a></li>
-  <li><strong>Firebase Cloud Messaging (Google LLC)</strong> - Push notification delivery. <a href="https://firebase.google.com/support/privacy" target="_blank">Firebase Privacy Information</a></li>
-  <li><strong>Google Play Services (Google LLC)</strong> - Core platform services on Android devices. <a href="https://policies.google.com/privacy" target="_blank">Google Privacy Policy</a></li>
-</ul>
-
-<p>Only aggregated, anonymized data is periodically transmitted to external services to aid the Service Provider in improving the Application and their service. The Service Provider may share your information with third parties in the ways that are described in this privacy statement.</p>
-
-<p>The Service Provider may disclose User Provided and Automatically Collected Information:</p>
-<ul>
-  <li>as required by law, such as to comply with a subpoena, or similar legal process;</li>
-  <li>when they believe in good faith that disclosure is necessary to protect their rights, protect your safety or the safety of others, investigate fraud, or respond to a government request;</li>
-  <li>with their trusted services providers who work on their behalf, do not have an independent use of the information we disclose to them, and have agreed to adhere to the rules set forth in this privacy statement.</li>
-</ul>
-
-<strong>Opt-Out Rights</strong>
-<p>You can stop all collection of information by the Application easily by uninstalling it. You may use the standard uninstall processes as may be available as part of your mobile device or via the mobile application marketplace or network.</p>
-
-<strong>Data Retention Policy</strong>
-<p>The Service Provider will retain User Provided data for as long as you use the Application and for a reasonable time thereafter. If you'd like them to delete User Provided Data that you have provided via the Application, please contact them at xvancom@stuba.sk and they will respond in a reasonable time.</p>
-
-<strong>Children</strong>
-<p>The Service Provider does not use the Application to knowingly solicit data from or market to children under the age of 13.</p>
-
-<p>The Application does not address anyone under the age of 13. The Service Provider does not knowingly collect personally identifiable information from children under 13 years of age. In the case the Service Provider discover that a child under 13 has provided personal information, the Service Provider will immediately delete this from their servers. If you are a parent or guardian and you are aware that your child has provided us with personal information, please contact the Service Provider (xvancom@stuba.sk) so that they will be able to take the necessary actions.</p>
+<strong>Deleting your data and your rights</strong>
+<p>You can delete your account in the App, under My Account. Deletion removes your email, name and password from our server at once. Your pseudonymous measurements stay, because they no longer identify you and the study depends on their counts. You have the right to access, correct and delete your personal data, to restrict or object to its processing, to data portability, and to withdraw consent. To use these rights, write to jakub.dubec@stuba.sk. You may also complain to the Office for Personal Data Protection of the Slovak Republic (Úrad na ochranu osobných údajov Slovenskej republiky).</p>
 
 <strong>Security</strong>
-<p>The Service Provider is concerned about safeguarding the confidentiality of your information. The Service Provider provides physical, electronic, and procedural safeguards to protect information the Service Provider processes and maintains.</p>
+<p>All traffic between the App and our server uses HTTPS. Passwords are stored only as hashes. The management interface is limited to administrator accounts.</p>
 
 <strong>Changes</strong>
-<p>This Privacy Policy may be updated from time to time for any reason. The Service Provider will notify you of any changes to the Privacy Policy by updating this page with the new Privacy Policy. You are advised to consult this Privacy Policy regularly for any changes, as continued use is deemed approval of all changes.</p>
+<p>We will publish any change to this policy on this page and tell participants in the App or by email.</p>
 
-<p>This privacy policy is effective as of 2026-03-12</p>
+<p>This policy is effective as of 2026-10-22.</p>
 
-<strong>Your Consent</strong>
-<p>By using the Application, you are consenting to the processing of your information as set forth in this Privacy Policy now and as amended by us.</p>
-
-<strong>Contact Us</strong>
-<p>If you have any questions regarding privacy while using the Application, or have questions about the practices, please contact the Service Provider via email at xvancom@stuba.sk.</p>
+<strong>Contact</strong>
+<p>Jakub Dubec, FIIT STU, Bratislava, Slovakia. Email: jakub.dubec@stuba.sk</p>
 </body>
 </html>

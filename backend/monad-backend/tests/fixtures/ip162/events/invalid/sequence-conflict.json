@@ -1,0 +1,100 @@
+{
+  "description": "Sequence 2 arrives twice with different counts. Neither version is chosen; the conflict is recorded.",
+  "events": [
+    {
+      "mono_ns": "100000000000",
+      "wall_ms": 1758441600000,
+      "payload": {
+        "schema": "monad-app/headcount-marker/v3",
+        "sweep_id": "5e000000-0000-4000-8000-000000000001",
+        "recording_session_id": "0f000000-0000-4000-8000-00000000000a",
+        "enrollment_id": "0e000000-0000-4000-8000-00000000000b",
+        "step_completion_id": "0c000000-0000-4000-8000-00000000000c",
+        "protocol_id": "fixture-room-sweep",
+        "protocol_sha256": "b33e25d256344f01b2991c38afda5dc1592ba801a6cb6e17fac120f3ebc1e24a",
+        "mode": "room_sweep_cumulative",
+        "room_id": "fixture-room-a",
+        "coverage_version": "c1",
+        "prompt": "People counted so far",
+        "event_id": "e0000000-0000-4000-8000-000000000001",
+        "sequence": 1,
+        "event_type": "start",
+        "on_air": true,
+        "observer_excluded": true,
+        "observers_in_area": 1
+      }
+    },
+    {
+      "mono_ns": "130000000000",
+      "wall_ms": 1758441630000,
+      "payload": {
+        "schema": "monad-app/headcount-marker/v3",
+        "sweep_id": "5e000000-0000-4000-8000-000000000001",
+        "recording_session_id": "0f000000-0000-4000-8000-00000000000a",
+        "enrollment_id": "0e000000-0000-4000-8000-00000000000b",
+        "step_completion_id": "0c000000-0000-4000-8000-00000000000c",
+        "protocol_id": "fixture-room-sweep",
+        "protocol_sha256": "b33e25d256344f01b2991c38afda5dc1592ba801a6cb6e17fac120f3ebc1e24a",
+        "mode": "room_sweep_cumulative",
+        "room_id": "fixture-room-a",
+        "coverage_version": "c1",
+        "prompt": "People counted so far",
+        "event_id": "e0000000-0000-4000-8000-000000000002",
+        "sequence": 2,
+        "event_type": "checkpoint",
+        "on_air": true,
+        "count": 3
+      }
+    },
+    {
+      "mono_ns": "130000000000",
+      "wall_ms": 1758441630000,
+      "payload": {
+        "schema": "monad-app/headcount-marker/v3",
+        "sweep_id": "5e000000-0000-4000-8000-000000000001",
+        "recording_session_id": "0f000000-0000-4000-8000-00000000000a",
+        "enrollment_id": "0e000000-0000-4000-8000-00000000000b",
+        "step_completion_id": "0c000000-0000-4000-8000-00000000000c",
+        "protocol_id": "fixture-room-sweep",
+        "protocol_sha256": "b33e25d256344f01b2991c38afda5dc1592ba801a6cb6e17fac120f3ebc1e24a",
+        "mode": "room_sweep_cumulative",
+        "room_id": "fixture-room-a",
+        "coverage_version": "c1",
+        "prompt": "People counted so far",
+        "event_id": "e0000000-0000-4000-8000-000000000002",
+        "sequence": 2,
+        "event_type": "checkpoint",
+        "on_air": true,
+        "count": 4
+      }
+    },
+    {
+      "mono_ns": "160000000000",
+      "wall_ms": 1758441660000,
+      "payload": {
+        "schema": "monad-app/headcount-marker/v3",
+        "sweep_id": "5e000000-0000-4000-8000-000000000001",
+        "recording_session_id": "0f000000-0000-4000-8000-00000000000a",
+        "enrollment_id": "0e000000-0000-4000-8000-00000000000b",
+        "step_completion_id": "0c000000-0000-4000-8000-00000000000c",
+        "protocol_id": "fixture-room-sweep",
+        "protocol_sha256": "b33e25d256344f01b2991c38afda5dc1592ba801a6cb6e17fac120f3ebc1e24a",
+        "mode": "room_sweep_cumulative",
+        "room_id": "fixture-room-a",
+        "coverage_version": "c1",
+        "prompt": "People counted so far",
+        "event_id": "e0000000-0000-4000-8000-000000000003",
+        "sequence": 3,
+        "event_type": "finalise",
+        "on_air": true,
+        "count": 4,
+        "coverage": "complete",
+        "occupancy_stability": "stable",
+        "activity": "seated",
+        "duplicate_risk": "none_observed",
+        "observer_excluded": true,
+        "observers_in_area": 1
+      }
+    }
+  ]
+}

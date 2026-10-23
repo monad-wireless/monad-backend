@@ -1,0 +1,22 @@
+{
+  "description": "A prediction as a JSON number is refused. The receipt is hashed, and three languages print doubles three ways.",
+  "expect_problem": "prediction",
+  "receipt": {
+    "schema": "monad-lab/prediction-receipt/v1",
+    "receipt_id": "ae000000-0000-4000-8000-000000000003",
+    "study_id": "fixture-f2-recovery",
+    "study_sha256": "d890d549a1f33060e0babb5ce31907f1ba7386e9b77b92b86773dfa2e97e4942",
+    "comparator_id": "frozen",
+    "model_sha256": "494be1e608d3a291012d234fdf6daa2726da8c7e7ee529bdd7bdedb3ea190bfb",
+    "code_sha256": "ac67a1359506727b5079f7586e2b872a48e4aaf7150ecc7e134131aa2753eddf",
+    "feature_manifest_sha256": "b1b0d842f0a127f44bbe9f2fdb79dba984a40dffcfc8cf00d7844940fa7ff4a1",
+    "source_manifest_sha256": "211f721f5e62292774f0fac0068f56516c5d0c2bba7a3f793ff513c064e008f1",
+    "reference_window_id": "fixture-2026-10-07-1030",
+    "input_cutoff_ref_ns": "1759826400000000000",
+    "decision": "count",
+    "prediction": 5.4,
+    "interval": null,
+    "scoring_mode": "live",
+    "committed_wall_ms": 1759830000000
+  }
+}

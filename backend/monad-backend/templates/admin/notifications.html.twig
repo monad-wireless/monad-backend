@@ -1,0 +1,129 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% form_theme form 'bootstrap_5_layout.html.twig' %}
+
+{% block content_title %}Notifications{% endblock %}
+
+{% block main %}
+    {# The composer (IP-157 Phase 4). Server-rendered; admin-notifications.js only prefills the
+       callout templates from the picked quest and refreshes the recipient estimate. #}
+    <div class="row notif-desk"
+         data-estimate-url="{{ path('admin_people_notifications_estimate') }}"
+         data-push-configured="{{ push.configured ? '1' : '0' }}">
+        <div class="col-lg-8">
+            <div class="card mb-3">
+                <div class="card-header">Compose</div>
+                <div class="card-body">
+                    {{ form_start(form, {attr: {id: 'notif-compose', novalidate: 'novalidate'}}) }}
+                        {{ form_errors(form) }}
+
+                        <div class="row">
+                            <div class="col-md-6">{{ form_row(form.type) }}</div>
+                            <div class="col-md-6">{{ form_row(form.audience) }}</div>
+                        </div>
+
+                        {{ form_row(form.quest, {help: 'Quests whose window is open now. Picking one fills the callout title and body from a template; both stay editable. The push and the inbox row open the quest on tap.'}) }}
+
+                        {{ form_row(form.title, {help: 'At most 120 characters. Shown as the push title and the inbox headline.'}) }}
+                        {{ form_row(form.body) }}
+                        {{ form_row(form.deep_link, {help: 'Optional. Ignored by the app when a quest is picked (quest_id wins).'}) }}
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                {{ form_row(form.push) }}
+                                {{ form_row(form.send_mode) }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ form_row(form.scheduled_for) }}
+                                {{ form_row(form.expires_at, {help: 'After this instant the inbox stops listing it. A callout for a past window is noise.'}) }}
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Send</button>
+                        <span class="text-muted small ms-2">Nothing is editable after send. A scheduled one can be cancelled from the log.</span>
+                    {{ form_end(form) }}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card mb-3">
+                <div class="card-header">Recipients</div>
+                <table class="table table-sm table-dense table-facts mb-0">
+                    <tbody>
+                        <tr><th>Inbox</th><td class="num" data-estimate="inbox">{{ estimate.inbox }}</td></tr>
+                        <tr><th>Push-capable</th><td class="num" data-estimate="push">{{ estimate.push }}</td></tr>
+                    </tbody>
+                </table>
+                <div class="card-body pt-2 pb-2">
+                    <p class="text-muted small mb-1">Inbox: every account in the audience. Push-capable: those with a registered token who opted in to this type. <span data-estimate="status"></span></p>
+                    <p class="small mb-0 {{ push.configured ? '' : 'state-warn' }}">{{ push.sentence }}</p>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">Preview</div>
+                <div class="card-body">
+                    <div class="phone" aria-hidden="true">
+                        <div class="phone-notch"></div>
+                        <div class="phone-screen">
+                            <div class="phone-push" data-preview="card">
+                                <div class="phone-push-app"><span class="phone-push-icon"></span> MonadCount <span class="phone-push-when">now</span></div>
+                                <div class="phone-push-title" data-preview="title">{{ preview.title ?: 'Title' }}</div>
+                                <div class="phone-push-body" data-preview="body">{{ preview.body ?: 'Body' }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-0 mt-2">The OS banner as the phone shows it. Android files it under the <code data-preview="channel">{{ preview.type == 'quest_callout' ? 'Quest callouts' : 'Messages' }}</code> channel.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Log</div>
+        <div class="table-responsive">
+            <table class="table table-sm table-dense mb-0">
+                <thead>
+                    <tr>
+                        <th>Created</th>
+                        <th>Type</th>
+                        <th>Audience</th>
+                        <th>Title</th>
+                        <th>Scheduled</th>
+                        <th>Sent</th>
+                        <th class="num">Inbox</th>
+                        <th class="num">Queued</th>
+                        <th class="num">Sent</th>
+                        <th class="num">Failed</th>
+                        <th class="num">Skipped</th>
+                        <th class="num">Read</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for n in log %}
+                        {% set c = counts[n.id.toRfc4122] ?? {skipped: 0, queued: 0, sent: 0, failed: 0, read: 0, total: 0} %}
+                        <tr>
+                            <td><a href="{{ path('admin_people_notification', {id: n.id}) }}">{{ n.createdAt|clock }}</a></td>
+                            <td><code>{{ n.type.value }}</code></td>
+                            <td>{{ n.audience.value }}</td>
+                            <td class="wrap">{{ n.title }}{% if n.quest %} <span class="text-muted">· {{ n.quest.name }}</span>{% endif %}</td>
+                            <td>{{ n.scheduledFor|clock }}</td>
+                            <td>{% if n.sentAt %}{{ n.sentAt|clock }}{% else %}<span class="state state-warn">pending</span>{% endif %}</td>
+                            <td class="num">{{ c.total }}</td>
+                            <td class="num">{{ c.queued }}</td>
+                            <td class="num">{{ c.sent }}</td>
+                            <td class="num {{ c.failed > 0 ? 'state-bad' : '' }}">{{ c.failed }}</td>
+                            <td class="num">{{ c.skipped }}</td>
+                            <td class="num">{{ c.read }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="12" class="text-muted">Nothing composed yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="card-body pt-2 pb-2">
+            <p class="text-muted small mb-0">Inbox is every delivery row. Queued, sent, failed and skipped are the push outcome per recipient; skipped is a decision (no token, opt-in off, or push off), not a failure. Read counts inbox rows the app marked.</p>
+        </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,77 @@
+{#
+  The /join pages (IP-157). Standalone on purpose: base.html.twig is the Flex scaffold, and the
+  EasyAdmin layout needs an admin context. One column, at most 600 px, the public site's tokens
+  (monad_knowledge/web theme.py: paper, ink, signal, stale, fault, radius 0), system fonts, no
+  script. Shareable: no robots directive, and the Open Graph title is the page title.
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Join the MonadCount beta{% endblock %}</title>
+    <meta name="description" content="{% block description %}Leave your email for an invitation to the MonadCount student beta at FIIT STU Bratislava. Nothing to install yet; signing up is not enrolment in a study.{% endblock %}">
+    <meta property="og:title" content="{{ block('title') }}">
+    <meta property="og:description" content="{{ block('description') }}">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ join_url }}">
+    <style>
+        :root {
+            --paper: #FBFBF9;
+            --paper-sunk: #F3F2EE;
+            --ink: #231F20;
+            --ink-muted: #6b6a68;
+            --rule: #d9dde3;
+            --signal: #0096C9;
+            --signal-ink: #00688C;
+            --stale: #A96A00;
+            --fault: #A83A2C;
+        }
+        * { box-sizing: border-box; }
+        html { background: var(--paper); }
+        body {
+            margin: 0;
+            color: var(--ink);
+            background: var(--paper);
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 1rem;
+            line-height: 1.5;
+            -webkit-text-size-adjust: 100%;
+        }
+        main { max-width: 600px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+        h1 { font-size: 1.6rem; line-height: 1.2; margin: 0 0 1rem; }
+        h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: 0.02em; color: var(--ink-muted); margin: 2rem 0 0.5rem; }
+        p { margin: 0 0 1rem; }
+        a { color: var(--signal-ink); }
+        a:hover { color: var(--signal); }
+        .muted { color: var(--ink-muted); font-size: 0.9rem; }
+        .sig { border-top: 1px solid var(--rule); padding-top: 0.75rem; margin-top: 1.5rem; }
+        .field { margin: 0 0 1.25rem; }
+        .field > label, .field > .q { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+        .field .help { display: block; color: var(--ink-muted); font-size: 0.9rem; margin-bottom: 0.35rem; }
+        .field input[type=email], .field input[type=text] {
+            display: block; width: 100%; font: inherit; color: var(--ink); background: #fff;
+            border: 1px solid var(--rule); border-radius: 0; padding: 0.55rem 0.65rem;
+        }
+        .field input:focus, .field input[type=checkbox]:focus, .field input[type=radio]:focus { outline: 2px solid var(--signal); outline-offset: 1px; }
+        .choice { display: flex; gap: 0.6rem; align-items: flex-start; margin: 0.35rem 0; font-weight: 400; }
+        .choice input { margin: 0.3rem 0 0; flex: none; width: 1.05rem; height: 1.05rem; }
+        .error { color: var(--fault); font-size: 0.9rem; margin: 0.3rem 0 0; }
+        .field.bad input[type=email], .field.bad input[type=text] { border-color: var(--fault); }
+        .notice { border: 1px solid var(--rule); border-left: 4px solid var(--stale); background: var(--paper-sunk); padding: 0.75rem 0.9rem; margin: 0 0 1.25rem; }
+        .notice.fault { border-left-color: var(--fault); }
+        .btn {
+            font: inherit; font-weight: 600; color: #fff; background: var(--signal-ink);
+            border: 1px solid var(--signal-ink); border-radius: 0; padding: 0.7rem 1.3rem; cursor: pointer;
+        }
+        .btn:hover { background: var(--signal); border-color: var(--signal); }
+        .note { border-top: 1px solid var(--rule); margin-top: 1.5rem; padding-top: 1rem; font-size: 0.9rem; color: var(--ink-muted); }
+        .hp { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+    </style>
+</head>
+<body>
+    <main>
+        {% block body %}{% endblock %}
+    </main>
+</body>
+</html>

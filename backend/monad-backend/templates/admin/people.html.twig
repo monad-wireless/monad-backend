@@ -1,0 +1,55 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% import 'admin/_ui.html.twig' as ui %}
+
+{#
+  PARTICIPANTS — the rail entry ahead of the lane that fills it (IP-157 Phase 10).
+  Honest, not empty: it says what is not here yet and links to the two surfaces that do the job.
+#}
+
+{% block content_title %}Participants{% endblock %}
+{% block page_actions %}<a class="ui-btn ui-btn-primary" href="{{ path('admin_people_onboarding') }}">Onboarding desk</a>{% endblock %}
+
+{% block main %}
+    {{ ui.strip([
+        {label: 'Accounts', value: accounts},
+        {label: 'Signups', value: signups_total},
+        {label: 'Waiting on a decision', value: signups_waiting, state: signups_waiting > 0 ? 'warn' : 'muted'},
+    ]) }}
+
+    <p class="ui-note">Invite new testers from the onboarding desk, or open an account to review their activity and manage access.</p>
+
+    <div class="ui-section">
+        <h2>Recent accounts <span class="more"><a href="{{ users_url }}">Search and manage all accounts</a></span></h2>
+        {% if accounts > recent_accounts|length %}<p class="ui-note">Showing the latest {{ recent_accounts|length }} of {{ accounts }} accounts.</p>{% endif %}
+        {% set rows = [] %}
+        {% for person in recent_accounts %}
+            {% set rows = rows|merge([{href: path('admin_participant', {id: person.id}), cells: [
+                ui.identity(person.name, person.email, path('admin_participant', {id: person.id})),
+                person.status|state_word,
+                person.isSuperAdmin ? 'Operator' : 'Participant',
+                ui.clock(person.createdAt),
+            ]}]) %}
+        {% endfor %}
+        {{ ui.table(rows, [{label: 'Participant', wrap: true}, {label: 'Status'}, {label: 'Access'}, {label: 'Joined'}], {datatable: true, label: 'accounts', empty: 'No accounts yet.'}) }}
+    </div>
+
+    <div class="ui-section">
+        <h2>Manage participants</h2>
+        {{ ui.table([
+            {href: path('admin_people_onboarding'), cells: [
+                '<a href="' ~ path('admin_people_onboarding') ~ '">Onboarding desk</a>',
+                'Prepare invitations, follow up with testers and manage signup notes.',
+                signups_waiting > 0 ? '<span class="state state-warn">' ~ signups_waiting ~ ' waiting</span>' : ui.state('clear', 'muted'),
+            ]},
+            {href: users_url, cells: [
+                '<a href="' ~ users_url ~ '">Accounts</a>',
+                'Every account: name, e-mail, roles, status, password reset and anonymise.',
+                accounts,
+            ]},
+        ], [
+            {label: 'Page'},
+            {label: 'What it does', wrap: true},
+            {label: '', align: 'right'}
+        ]) }}
+    </div>
+{% endblock %}

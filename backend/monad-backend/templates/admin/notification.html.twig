@@ -1,0 +1,85 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block content_title %}{{ n.title }}{% endblock %}
+
+{% block main %}
+    <div class="strip">
+        <span><span class="k">Type</span><code>{{ n.type.value }}</code></span>
+        <span><span class="k">Audience</span>{{ n.audience.value }}</span>
+        <span><span class="k">Created</span>{{ n.createdAt|clock }} by {{ n.createdBy.email }}</span>
+        <span><span class="k">Scheduled</span>{{ n.scheduledFor|clock }}</span>
+        <span><span class="k">Sent</span>{% if n.sentAt %}{{ n.sentAt|clock }}{% else %}<span class="state state-warn">pending</span>{% endif %}</span>
+        <span><span class="k">Expires</span>{{ n.expiresAt|clock }}</span>
+        <span><span class="k">Push</span>{{ n.push ? 'on' : 'off' }}</span>
+        <span><a href="{{ path('admin_people_notifications') }}">back to the desk</a></span>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card mb-3">
+                <div class="card-header">What was composed</div>
+                <table class="table table-sm table-dense table-facts mb-0">
+                    <tbody>
+                        <tr><th>Id</th><td><code>{{ n.id }}</code></td></tr>
+                        <tr><th>Title</th><td class="wrap">{{ n.title }}</td></tr>
+                        <tr><th>Body</th><td class="wrap">{{ n.body|nl2br }}</td></tr>
+                        <tr><th>Quest</th><td>{% if n.quest %}<a href="{{ path('admin_quest_analytics', {id: n.quest.id}) }}">{{ n.quest.name }}</a> <code>{{ n.quest.id }}</code>{% else %}—{% endif %}</td></tr>
+                        <tr><th>Deep link</th><td class="wrap"><code>{{ n.deepLink ?? '—' }}</code></td></tr>
+                    </tbody>
+                </table>
+                {% if n.sentAt is null %}
+                    <div class="card-body pt-2 pb-2">
+                        <form method="post" action="{{ path('admin_people_notification_cancel', {id: n.id}) }}" onsubmit="return confirm('Cancel this scheduled notification? It has not been sent and will be deleted.');">
+                            <input type="hidden" name="_token" value="{{ csrf_token('cancel-notification-' ~ n.id.toRfc4122) }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Cancel (delete before it is sent)</button>
+                        </form>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card mb-3">
+                <div class="card-header">Outcome</div>
+                <table class="table table-sm table-dense table-facts mb-0">
+                    <tbody>
+                        <tr><th>Inbox rows</th><td class="num">{{ counts.total }}</td></tr>
+                        <tr><th>Push queued</th><td class="num">{{ counts.queued }}</td></tr>
+                        <tr><th>Push sent</th><td class="num">{{ counts.sent }}</td></tr>
+                        <tr><th>Push failed</th><td class="num {{ counts.failed > 0 ? 'state-bad' : '' }}">{{ counts.failed }}</td></tr>
+                        <tr><th>Push skipped</th><td class="num">{{ counts.skipped }}</td></tr>
+                        <tr><th>Read</th><td class="num">{{ counts.read }}</td></tr>
+                    </tbody>
+                </table>
+                <div class="card-body pt-2 pb-2">
+                    <p class="text-muted small mb-0">{{ push.sentence }}{% if counts.queued > 0 %} Queued rows advance when the worker consumes the <code>async</code> transport.{% endif %}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Deliveries</div>
+        <div class="table-responsive">
+            <table class="table table-sm table-dense mb-0">
+                <thead><tr><th>Recipient</th><th>Name</th><th>Push</th><th>Delivered</th><th>Read</th><th>Error</th></tr></thead>
+                <tbody>
+                    {% for d in deliveries %}
+                        <tr>
+                            <td><a href="{{ path('admin_participant', {id: d.user.id}) }}">{{ d.user.email }}</a></td>
+                            <td>{{ d.user.name ?? '—' }}</td>
+                            <td>
+                                {%- set cls = {sent: 'state-ok', queued: 'state-muted', skipped: 'state-muted', failed: 'state-bad'} -%}
+                                <span class="state {{ cls[d.pushStatus.value] ?? 'state-muted' }}">{{ d.pushStatus.value }}</span>
+                            </td>
+                            <td>{{ d.deliveredAt|clock }}</td>
+                            <td>{{ d.readAt|clock }}</td>
+                            <td class="wrap"><code>{{ d.pushError ?? '' }}</code></td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="6" class="text-muted">{% if n.sentAt is null %}Not sent yet; deliveries are written at send time.{% else %}The audience resolved to nobody.{% endif %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

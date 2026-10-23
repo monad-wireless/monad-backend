@@ -1,0 +1,88 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% import 'admin/_ui.html.twig' as ui %}
+{% block content_title %}Onboarding desk{% endblock %}
+{% block breadcrumb %}<a href="{{ path('admin_people') }}">Participants</a> / Onboarding{% endblock %}
+{% block page_actions %}<a class="ui-btn" href="{{ path('admin_people_onboarding_export', {status: filter}) }}">Export signups CSV</a>{% endblock %}
+{% block main %}
+    {% set token = csrf_token('onboarding') %}
+    <div class="onboarding">
+        <p class="ui-note">Prepare a personal invitation, send it from Mail, then mark the signup as invited.</p>
+        <nav class="ui-tabs" aria-label="Signup status">
+            <a href="{{ path('admin_people_onboarding', {status: 'new,invited'}) }}" class="{{ filter == 'new,invited' ? 'is-active' }}">To follow up <span class="n">{{ counts.new + counts.invited }}</span></a>
+            {% for s in all_statuses %}
+                <a href="{{ path('admin_people_onboarding', {status: s}) }}" class="{{ filter == s ? 'is-active' }}"{{ filter == s ? ' aria-current="page"' : '' }}>{{ s|capitalize }} <span class="n">{{ counts[s] ?? 0 }}</span></a>
+            {% endfor %}
+            <a href="{{ path('admin_people_onboarding', {status: 'all'}) }}" class="{{ filter == 'all' ? 'is-active' }}">All <span class="n">{{ counts|reduce((c, n) => c + n, 0) }}</span></a>
+        </nav>
+        <div class="ui-table-wrap">
+            <table class="ui-table onboarding-table" data-datatable data-table-label="signups">
+                <thead><tr><th scope="col">Participant</th><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Signed up</th><th scope="col" data-no-sort>Details</th><th scope="col" data-no-sort>Actions</th></tr></thead>
+                <tbody>
+                {% for row in rows %}
+                    {% set s = row.signup %}
+                    <tr>
+                        <td class="wrap">{{ ui.identity(s.name, s.status.value == 'withdrawn' ? null : s.email) }}{% if s.status.value == 'withdrawn' %}<span class="text-muted">Personal details removed</span>{% endif %}</td>
+                        <td>{{ {ios: 'iPhone', android: 'Android', unsure: 'Not sure'}[s.platform.value] }}</td>
+                        <td>{{ ui.state(s.status.value, s.status.value == 'new' ? 'warn' : (s.status.value in ['invited', 'registered'] ? 'ok' : 'muted')) }}</td>
+                        <td data-order="{{ s.createdAt.timestamp }}">{{ ui.clock(s.createdAt) }}</td>
+                        <td>
+                            <details class="row-details">
+                                <summary>{{ s.notes ? 'Notes & history' : 'Details & notes' }}</summary>
+                                <dl>
+                                    <dt>Availability</dt><dd>{{ {yes: 'Available', sometimes: 'Sometimes', remote: 'Remote only', no: 'Not available'}[s.availability.value] ?? s.availability.value }}</dd>
+                                    <dt>Updates</dt><dd>{{ s.updatesOptIn ? 'Opted in' : 'Not subscribed' }}</dd>
+                                    <dt>Source</dt><dd>{{ s.source ?? 'Not recorded' }}</dd>
+                                    <dt>Invited</dt><dd>{{ s.invitedAt|clock }}{% if s.invitedBy %}<br>{{ s.invitedBy.email }}{% endif %}</dd>
+                                    <dt>Registered</dt><dd>{{ s.registeredAt|clock }}{% if s.user %} <a href="{{ path('admin_participant', {id: s.user.id}) }}">View participant</a>{% endif %}</dd>
+                                </dl>
+                                {% if s.status.value != 'withdrawn' %}
+                                    <form method="post" action="{{ path('admin_people_onboarding_notes', {id: s.id}) }}" class="signup-notes">
+                                        <input type="hidden" name="_token" value="{{ token }}"><input type="hidden" name="filter" value="{{ filter }}">
+                                        <label for="notes-{{ s.id }}">Private operator note</label>
+                                        <textarea id="notes-{{ s.id }}" name="notes" rows="3">{{ s.notes ?? '' }}</textarea>
+                                        <button type="submit" class="ui-btn">Save note</button>
+                                    </form>
+                                {% endif %}
+                            </details>
+                        </td>
+                        <td>
+                            <div class="row-actions">
+                                {% if s.status.value in ['new', 'invited'] %}
+                                    <a class="ui-btn ui-btn-primary" href="{{ path('admin_people_onboarding_draft', {id: s.id}) }}" download aria-label="Download invitation for {{ s.name ?? s.email }}">Invitation .eml</a>
+                                {% endif %}
+                                {% if s.status.value == 'new' %}
+                                    <form method="post" action="{{ path('admin_people_onboarding_invite', {id: s.id}) }}">
+                                        <input type="hidden" name="_token" value="{{ token }}"><input type="hidden" name="filter" value="{{ filter }}">
+                                        <button type="submit" class="ui-btn" title="Use after sending the invitation in Mail">Mark invited</button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                            {% if s.status.value in ['new', 'invited', 'declined'] %}
+                                <details class="row-details signup-more">
+                                    <summary>More actions</summary>
+                                    <div class="row-actions">
+                                        {% if s.status.value in ['new', 'invited'] %}
+                                            <form method="post" action="{{ path('admin_people_onboarding_decline', {id: s.id}) }}" data-confirm="Decline this signup? No email will be sent.">
+                                                <input type="hidden" name="_token" value="{{ token }}"><input type="hidden" name="filter" value="{{ filter }}"><button type="submit" class="ui-btn">Decline</button>
+                                            </form>
+                                        {% endif %}
+                                        <form method="post" action="{{ path('admin_people_onboarding_withdraw', {id: s.id}) }}" data-confirm="Withdraw {{ s.email }}? Their email, name and notes will be permanently removed.">
+                                            <input type="hidden" name="_token" value="{{ token }}"><input type="hidden" name="filter" value="{{ filter }}"><button type="submit" class="ui-btn ui-btn-danger">Withdraw</button>
+                                        </form>
+                                    </div>
+                                </details>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}<tr><td colspan="6">No signups with this status. Choose another status above.</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if rows|length == 500 %}<p class="ui-note">Showing the newest 500 signups in this view. Narrow the status or use the CSV export for older signups.</p>{% endif %}
+        <aside class="invitation-help">
+            <strong>Sending from Apple Mail</strong>
+            <p>Download the .eml file and open it in Mail. Choose <strong>Message → Send Again</strong> (⇧⌘D) to edit and send. The recipient, your sender address and a personal Slovak message are already filled in. Check the From account before sending.</p>
+            <p>Downloading does not send an email or change the signup. Use <strong>Mark invited</strong> after you send it.</p>
+        </aside>
+    </div>
+{% endblock %}

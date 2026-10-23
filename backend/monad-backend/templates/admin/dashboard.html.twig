@@ -1,0 +1,137 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% import 'admin/_ui.html.twig' as ui %}
+
+{#
+  TODAY (IP-157 Phase 8). What needs a human, then what is running, then what just happened.
+
+  The old Overview opened with seven counts and two dense tables, which is a report rather than
+  a page you act on. The order here is the order of the questions an operator actually asks
+  standing in the building, and the totals — which change by ones over weeks — are last.
+#}
+
+{% block content_title %}Today{% endblock %}
+
+{% block main %}
+    <div class="ui-section">
+        <h2>Needs attention</h2>
+        {{ ui.attention(attention) }}
+    </div>
+
+    <div class="ui-section">
+        <h2>Live quests<span class="more"><a href="{{ path('admin_lab_quests') }}">All quests</a></span></h2>
+        {% set rows = [] %}
+        {% for q in live_quests %}
+            {# `q.id` is a UuidV4 OBJECT and `quest_runs` is keyed by the RFC 4122 STRING
+               (QuestEnrollmentRepository::countsForQuests casts it). PHP 8.3 throws on a
+               non-int, non-string array offset, so `quest_runs[q.id]` was a 500 on this
+               page — the whole Overview — the moment one quest was live. `??` does not
+               catch it: the offset is evaluated before the coalesce. #}
+            {# `runs`, NOT `counts`. A Twig `set` inside a `for` outlives the loop, and `counts`
+               is the controller's totals block, read at "Totals" below — so this name shadowed
+               it and the page died there instead. That defect was invisible while the offset
+               above threw first. #}
+            {% set runs = quest_runs[q.id.toRfc4122()] ?? {today: 0, total: 0} %}
+            {% set rows = rows|merge([{
+                href: path('admin_lab_quests_edit', {id: q.id}),
+                cells: [
+                    q.name|e,
+                    ui.state(q.audience, q.audience == 'operator' ? 'muted' : 'ok'),
+                    q.availableTo is null ? '<span class="state state-muted">never closes</span>' : ui.clock(q.availableTo),
+                    runs.today,
+                    runs.total,
+                ]
+            }]) %}
+        {% endfor %}
+        {{ ui.table(rows, [
+            {label: 'Quest', wrap: true},
+            {label: 'Audience'},
+            {label: 'Window closes'},
+            {label: 'Runs today', align: 'right'},
+            {label: 'Runs total', align: 'right'}
+        ], {empty: 'No quest is open right now. A quest becomes live when its window opens.'}) }}
+    </div>
+
+    <div class="ui-section">
+        <h2>Last ten runs<span class="more"><a href="{{ runs_url }}">All runs</a></span></h2>
+        {% set rows = [] %}
+        {% for e in recent_enrollments %}
+            {% set rows = rows|merge([{
+                href: path('admin_enrollment', {id: e.id}),
+                cells: [
+                    ui.clock(e.createdAt),
+                    e.user ? ui.identity(e.user.name, e.user.email, path('admin_participant', {id: e.user.id})) : ui.state('account removed', 'muted'),
+                    e.quest ? e.quest.name|e : '—',
+                    e.device ? '<code>' ~ e.device.slug|e ~ '</code>' : '—',
+                    e.handset ? e.handset.displayName|e : '<span class="state state-muted">not reported</span>',
+                    e.status|state_word,
+                    e.completionReceivedAt is null ? '<span class="state state-muted">—</span>' : ui.clock(e.completionReceivedAt),
+                ]
+            }]) %}
+        {% endfor %}
+        {{ ui.table(rows, [
+            {label: 'Started'},
+            {label: 'Participant', wrap: true},
+            {label: 'Quest', wrap: true},
+            {label: 'Node'},
+            {label: 'Handset'},
+            {label: 'State'},
+            {label: 'Completed'}
+        ], {empty: 'No run yet. A row appears when someone starts a quest.'}) }}
+    </div>
+
+    <div class="ui-section">
+        <h2>This week<span class="more"><a href="{{ runs_url }}">Runs, all windows</a></span></h2>
+        {{ ui.table([[
+            '7 d',
+            week.started,
+            week.completed,
+            week.abandoned,
+            week.failed,
+            week.in_progress,
+            week.sessions,
+            week.bytes|bytes,
+            week.incomplete > 0 ? '<span class="state state-warn">' ~ week.incomplete ~ '</span>' : week.incomplete,
+        ]], [
+            {label: 'Window'},
+            {label: 'Runs started', align: 'right'},
+            {label: 'Completed', align: 'right'},
+            {label: 'Abandoned', align: 'right'},
+            {label: 'Failed', align: 'right'},
+            {label: 'In progress', align: 'right'},
+            {label: 'Sessions uploaded', align: 'right'},
+            {label: 'Bytes', align: 'right'},
+            {label: 'Without sidecar', align: 'right'}
+        ]) }}
+        <p class="ui-note">Incomplete uploads have recording files but are missing their session summary.</p>
+        {{ ui.chart('weekly-runs', 'Run outcomes · last 7 days', [
+            {label: 'Completed', value: week.completed},
+            {label: 'In progress', value: week.in_progress},
+            {label: 'Abandoned', value: week.abandoned},
+            {label: 'Failed', value: week.failed}
+        ]) }}
+    </div>
+
+    <div class="ui-section">
+        <h2>Totals</h2>
+        {{ ui.strip([
+            {label: 'Accounts', value: counts.users},
+            {label: 'Operators', value: counts.admins},
+            {label: 'Quests', value: counts.quests},
+            {label: 'Nodes', value: counts.devices, href: path('admin_lab')},
+            {label: 'Handsets', value: counts.handsets},
+            {label: 'Scans', value: counts.scans},
+            {label: 'Fleet', value: fleet.reachable
+                ? (fleet.scalars.nodes_reporting is defined ? fleet.scalars.nodes_reporting|round : '?')
+                  ~ '/' ~ (fleet.scalars.nodes_expected is defined ? fleet.scalars.nodes_expected|round : '?') ~ ' reporting'
+                : 'metrics store unreachable',
+             state: fleet.reachable ? null : 'warn',
+             href: path('admin_lab')},
+        ]) }}
+    </div>
+{% endblock %}
+
+{% block body_javascript %}
+    {{ parent() }}
+    <script src="{{ asset('vendor/plotly.min.js') }}" defer></script>
+    <script src="{{ asset('admin-charts.js') }}" defer></script>
+{% endblock %}

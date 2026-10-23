@@ -3,7 +3,41 @@ framework:
     secret: '%env(APP_SECRET)%'
 
     # Note that the session will be started ONLY if you read or write from it.
-    session: true
+    #
+    # IP-157, revision 2026-09-17 — /admin is published over public HTTPS, so the session cookie
+    # that IS the operator's credential now travels the Internet. `auto` sets Secure whenever the
+    # request is https, which the trusted X-Forwarded-Proto above makes true behind nginx and
+    # false on the dev server, so one setting is correct in both places without a per-environment
+    # branch. `httponly` keeps the cookie out of `document.cookie`, and `lax` keeps it off
+    # cross-site POSTs — the CSRF token on the login form is the other half of that, not a
+    # substitute for it.
+    session:
+        cookie_secure: auto
+        cookie_httponly: true
+        cookie_samesite: lax
+
+    # IP-157 — /join is served as monad.dubec.dev/join through the site's nginx, which forwards
+    # `Host: monad.dubec.dev` and `X-Forwarded-Proto: https`. Without trusting the proxy the
+    # request scheme reads as http and every absolute URL on the form (and the CSRF cookie's
+    # Secure flag) is wrong. REMOTE_ADDR is safe here because the container binds
+    # 127.0.0.1:8084 on the host: every request reaches it through nginx or from a service on
+    # the shared `monad` bridge, and both are ours. No trusted_hosts: the API answers on
+    # api.monad.dubec.dev, monad.dubec.dev (/join) and the tailnet name, and a list here would
+    # 400 the next name someone adds in nginx.
+    trusted_proxies: '127.0.0.1,REMOTE_ADDR'
+    trusted_headers: ['x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-host', 'x-forwarded-port', 'x-forwarded-prefix']
+
+    # A 404 or 405 is the client's fault, not the server's, and the ErrorListener logs every
+    # 4xx HttpException at `error` unless told otherwise. On 2026-09-23/24 that was 1,659 of the
+    # container's error lines in 24 h, all of them scanners probing `/.env`, `/.git/config`,
+    # `/docker-compose.yml` and `POST /` on the bare IP, burying any real error. `info` is below
+    # the fallback logger's `warning` floor, so these leave the container log; the host nginx
+    # access log still records every request with its status. A 5xx is untouched.
+    exceptions:
+        Symfony\Component\HttpKernel\Exception\NotFoundHttpException:
+            log_level: info
+        Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException:
+            log_level: info
 
     #esi: true
     #fragments: true

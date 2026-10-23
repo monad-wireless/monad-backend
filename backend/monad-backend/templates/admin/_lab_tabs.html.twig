@@ -1,0 +1,31 @@
+{#
+  THE LAB SECTION'S TAB BAR, rendered by every page in the section.
+
+  Until 2026-09-18 only `admin/lab.html.twig` called `ui.tabs`, so the four other
+  destinations arrived with no tab bar at all: a tab was a one-way exit and the rail was the
+  only way back, which returned you to Fleet rather than to where you were. The bar is defined
+  once here so the five pages cannot drift apart.
+
+  `active` is the label to mark, and it must match one of the labels below exactly — `ui.tabs`
+  compares by label, so a typo silently marks nothing.
+
+  The Devices tab is an EasyAdmin CRUD index with no route name of its own, so its URL comes
+  from `ea_url()` rather than `path()`. That generator is a SHARED, STATEFUL service and
+  `generateUrl()` does not reset it, so `unsetAll()` hands it back the way it was found.
+
+  Two pages under /admin/lab are deliberately absent: `/admin/lab/fleet` (the standalone vitals
+  page, whose table this section's Fleet tab already shows) and `/admin/lab/sessions`
+  (ground-truth sessions, which are a recording, not part of what the instrument IS).
+#}
+{% import 'admin/_ui.html.twig' as ui %}
+
+{% set _devices_url = ea_url().setController('App\\Controller\\Admin\\DeviceCrudController').setAction('index').generateUrl() %}
+{% do ea_url().unsetAll() %}
+
+{{ ui.tabs([
+    {label: 'Fleet', href: path('admin_lab')},
+    {label: 'Arming', href: path('admin_lab_arming')},
+    {label: 'Devices', href: _devices_url},
+    {label: 'Markers', href: path('admin_lab_placements')},
+    {label: 'Bundle', href: path('admin_lab_bundle')},
+], active) }}

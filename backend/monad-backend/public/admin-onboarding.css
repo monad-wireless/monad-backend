@@ -1,0 +1,12 @@
+/* Onboarding uses the shared table, button and disclosure components. */
+.onboarding-table td:first-child { min-width: 13rem; }
+.onboarding-table td:last-child { min-width: 15rem; max-width: 23rem; white-space: normal; }
+.onboarding-table .mono { display: block; white-space: normal; min-width: 9rem; font-size: .8rem; }
+.onboarding .ui-tabs { overflow-x: auto; flex-wrap: nowrap; margin-bottom: 1.25rem; }
+.onboarding .ui-tabs a { white-space: nowrap; }
+.signup-notes { min-width: 14rem; margin-top: .75rem; }
+.signup-notes label { display: block; font-size: .8125rem; margin-bottom: .4rem; }
+.signup-notes textarea { display: block; width: 100%; padding: .5rem; border: 1px solid var(--rule-strong); margin-bottom: .5rem; resize: vertical; }
+.signup-more { margin-top: .25rem; font-size: .8125rem; }
+.invitation-help { margin-top: 1.5rem; border-left: 3px solid var(--signal-ink); padding: .75rem 1rem; background: var(--signal-wash); max-width: 85ch; font-size: .875rem; }
+.invitation-help p { margin: .5rem 0 0; }

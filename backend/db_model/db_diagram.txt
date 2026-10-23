@@ -75,7 +75,7 @@ Table quest_enrollments {
   user_id uuid [ref: > users.id, not null]
   quest_id uuid [ref: > quests.id, not null]
   status quest_enrollment_status [not null, default: 'in_progress']
-  data_path varchar(512) [note: 'AWS S3 reference to .tar.gz file with logs and collected data']
+  data_path varchar(512) [note: 'Object-storage reference to .tar.gz file with logs and collected data']
   completed_at timestamp
   created_at timestamp [not null, default: `now()`]
 

@@ -1,0 +1,2 @@
+{# The raw value can be a backed enum or roles array; the text template's title cannot cast it. #}
+{{ field.value|state_word(field.customOptions.get('stateWhenTrue'), field.customOptions.get('stateWhenFalse')) }}

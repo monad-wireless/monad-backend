@@ -1,0 +1,46 @@
+{
+  "description": "The count reference projected from events/valid/sweep-complete.json under manifest/valid/sealed.json, with a clock fit that mapped both ends of the sweep. Fully eligible: human observation, completed sweep and stable room reference. rf_population_count = 6 + 1 observer.",
+  "reference": {
+    "schema": "monad-lab/count-reference/v1",
+    "reference_id": "ce000000-0000-4000-8000-000000000001",
+    "revision": 1,
+    "parent_reference_id": null,
+    "cohort": "scheduled_researcher",
+    "recording_session_id": "0f000000-0000-4000-8000-00000000000a",
+    "sweep_id": "5e000000-0000-4000-8000-000000000001",
+    "manifest_sha256": "c7777fcec79b0e83c9524f4a99c623e9c55b9b5f93db38eb41a9cbb150d37fed",
+    "final_event_id": "e0000000-0000-4000-8000-000000000005",
+    "protocol_id": "fixture-room-sweep",
+    "protocol_sha256": "b33e25d256344f01b2991c38afda5dc1592ba801a6cb6e17fac120f3ebc1e24a",
+    "mode": "room_sweep_cumulative",
+    "floor_id": "test-lab-synth-floor-0",
+    "room_id": "fixture-room-a",
+    "coverage_version": "c1",
+    "sweep_start_mono_ns": "100000000000",
+    "sweep_end_mono_ns": "220000000000",
+    "sweep_start_ref_ns": "1758441600100000000",
+    "sweep_end_ref_ns": "1758441720100000000",
+    "time_uncertainty_ns": "25000000",
+    "clock_fit_id": "fixture-clock-fit-1",
+    "human_count_excluding_observers": 6,
+    "observers_in_area": 1,
+    "rf_population_count": 7,
+    "coverage": "complete",
+    "occupancy_stability": "stable",
+    "activity": "seated",
+    "duplicate_risk": "none_observed",
+    "checkpoints": [
+      {"event_id": "e0000000-0000-4000-8000-000000000002", "sequence": 2, "count": 3, "mono_ns": "130000000000", "corrected_by": null},
+      {"event_id": "e0000000-0000-4000-8000-000000000003", "sequence": 3, "count": 5, "mono_ns": "160000000000", "corrected_by": null},
+      {"event_id": "e0000000-0000-4000-8000-000000000004", "sequence": 4, "count": 5, "mono_ns": "190000000000", "corrected_by": null}
+    ],
+    "corrections": 0,
+    "eligibility": {
+      "human_observation": true,
+      "completed_sweep": true,
+      "stable_room_reference": true,
+      "reasons": []
+    },
+    "projection_version": "count-reference-projection-1"
+  }
+}
