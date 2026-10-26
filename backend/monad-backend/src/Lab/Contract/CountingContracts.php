@@ -108,8 +108,15 @@ final class CountingContracts
         if (array_key_exists('description', $config) && !is_string($config['description'])) {
             $out[] = 'description: a string';
         }
+        // Optional plan of the area to count (2026-10-26, the Zone count quest). Covered by the
+        // digest like every other field.
+        if (array_key_exists('image', $config)
+            && (!is_string($config['image']) || strlen($config['image']) > 512
+                || preg_match('#^https?://#', $config['image']) !== 1)) {
+            $out[] = 'image: an http(s) URL of at most 512 characters';
+        }
         $allowed = ['schema', 'mode', 'description', 'prompt', 'protocol_id', 'protocol_sha256', 'rooms',
-            'checkpoints', 'observer_convention', 'max_count'];
+            'checkpoints', 'observer_convention', 'max_count', 'image'];
         foreach (array_diff(array_keys($config), $allowed) as $key) {
             $out[] = sprintf('%s: unexpected key', $key);
         }
