@@ -144,6 +144,30 @@ class FleetMetricsReaderTest extends TestCase
         }
     }
 
+    public function testBurstReadingsArePublishedPerNodeAndAbsentWhereNotMeasured(): void
+    {
+        // The zone map's inputs. A node whose profile has `[burst]` off exports no
+        // such series, and its readings must be absent rather than zero: a zero
+        // RSSI spread would read as the quietest zone in the room.
+        $snapshot = $this->reader([
+            'quantile_over_time(0.1' => self::vector([self::sample(['host' => 'monad02'], '0.21')]),
+            'quantile="0.75"}' => self::vector([self::sample(['host' => 'monad02'], '0.48')]),
+            'quantile="0.9"}' => self::vector([self::sample(['host' => 'monad02'], '0.71')]),
+            'csid_burst_minute_start_seconds' => self::vector([self::sample(['host' => 'monad02'], '42')]),
+            'csid_node_temp_celsius' => self::vector([
+                self::sample(['host' => 'monad02'], '77.1'),
+                self::sample(['host' => 'monad03'], '70.0'),
+            ]),
+        ])->snapshot();
+
+        $m02 = $snapshot['nodes']['monad02']['values'];
+        self::assertSame(0.48, $m02['burst_rssi_sd_p75_db']);
+        self::assertSame(0.71, $m02['burst_rssi_sd_p90_db']);
+        self::assertSame(0.21, $m02['burst_floor_p75_db']);
+        self::assertSame(42.0, $m02['burst_age_s']);
+        self::assertArrayNotHasKey('burst_rssi_sd_p75_db', $snapshot['nodes']['monad03']['values']);
+    }
+
     public function testASeriesWithNoHostIsDroppedRatherThanKeyedOnNothing(): void
     {
         $snapshot = $this->reader([

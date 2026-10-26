@@ -60,6 +60,23 @@ final class FleetMetricsReader
         'memory_used_pct' => 'monad:host_memory_used_pct',
         'uptime_seconds' => 'time() - node_boot_time_seconds{monad_node_role="csi-node"}',
         'monitor_frames_per_s' => 'monad_nic:monitor_frames:rate5m',
+        // The zone map (2026-10-26). csid's `[burst]` writer publishes, once a
+        // minute, the p75/p90 over that minute's 2-s windows of the illuminator
+        // frames' RSSI SD (the lake's `inj_rssi_sd`; study
+        // `2026-10-26-csi-burst-features` in monad-knowledge). Absent on a node
+        // whose profile has `[burst]` off, which the site must render as "not
+        // measured", never as a quiet zone.
+        'burst_rssi_sd_p75_db' => 'csid_burst_inj_rssi_sd_db{quantile="0.75"}',
+        'burst_rssi_sd_p90_db' => 'csid_burst_inj_rssi_sd_db{quantile="0.9"}',
+        // Seconds since the minute the burst samples describe began. A textfile
+        // outlives its writer: after a session ends node_exporter keeps serving
+        // the last minute, so the age is what tells live from stale.
+        'burst_age_s' => 'time() - csid_burst_minute_start_seconds',
+        // The node's own quiet reference: the 10th percentile of its p75 over the
+        // last day. The library is closed and empty every night, so a day always
+        // holds quiet minutes; this is a display floor, not the estimator's
+        // certified-empty floor (which needs the BLE union this store does not hold).
+        'burst_floor_p75_db' => 'quantile_over_time(0.1, csid_burst_inj_rssi_sd_db{quantile="0.75"}[24h])',
     ];
 
     /**
