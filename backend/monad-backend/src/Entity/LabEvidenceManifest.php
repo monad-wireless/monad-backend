@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Entity;
 
+use App\Lab\Contract\CountingContracts;
 use App\Repository\LabEvidenceManifestRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
@@ -124,11 +125,15 @@ class LabEvidenceManifest
         return array_values(array_filter((array) ($this->manifest['sweep_ids'] ?? []), 'is_string'));
     }
 
-    public function getStepCompletionId(): ?string
+    /** @return list<string> v1's one step completion as a one-element list, v2's list as is */
+    public function getStepCompletionIds(): array
     {
-        $value = $this->manifest['step_completion_id'] ?? null;
+        return CountingContracts::manifestStepCompletionIds($this->manifest);
+    }
 
-        return is_string($value) ? $value : null;
+    public function isV1(): bool
+    {
+        return ($this->manifest['schema'] ?? null) === CountingContracts::SCHEMA_EVIDENCE_MANIFEST_V1;
     }
 
     /** @return array<string, array<string, mixed>> */

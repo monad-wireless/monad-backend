@@ -46,6 +46,7 @@ final class EvidenceSealFlowTest extends KernelTestCase
     /** UUID-shaped, as the app mints recording ids; the contract requires it and the scrub filters on the prefix. */
     private const RECORDING = '1a162000-0000-4000-8000-000000000001';
     private const SWEEP = '5e000000-0000-4000-8000-000000000001';
+    private const SWEEP_2 = '5e000000-0000-4000-8000-000000000002';
 
     private EntityManagerInterface $em;
     private LabSessionRegister $register;
@@ -349,6 +350,86 @@ final class EvidenceSealFlowTest extends KernelTestCase
         self::assertFalse(SweepReceiptService::isSweepStep($legacy));
     }
 
+    // ── several sweep steps in one recording (Zone count, 2026-10-28) ─────────────────────────
+
+    public function testAV2ManifestVerifiesEverySweepStepItLists(): void
+    {
+        $second = $this->addSweepStep();
+        $manifest = $this->manifest('monad-lab/evidence-manifest/v2',
+            [$this->sweepStep->getId()->toRfc4122(), $second->getId()->toRfc4122()], [self::SWEEP, self::SWEEP_2]);
+        $outcome = $this->seal->seal($this->session(), $manifest, $this->participant);
+        self::assertSame(SealOutcome::VERIFIED, $outcome->status, json_encode($outcome->toArray()));
+
+        self::assertSame([], $this->receiptService->recordCompletion($this->sweepStep, $this->summary()));
+        self::assertSame([], $this->receiptService->recordCompletion($second, $this->summary($second, self::SWEEP_2)));
+        $this->em->flush();
+
+        self::assertSame(LabReferenceReceipt::STATUS_VERIFIED, $this->receiptFor(self::SWEEP)?->getStatus());
+        self::assertSame(LabReferenceReceipt::STATUS_VERIFIED, $this->receiptFor(self::SWEEP_2)?->getStatus());
+    }
+
+    public function testAV2ManifestDoesNotCoverAStepItLeavesOut(): void
+    {
+        $second = $this->addSweepStep();
+        $manifest = $this->manifest('monad-lab/evidence-manifest/v2', null, [self::SWEEP, self::SWEEP_2]);
+        self::assertSame(SealOutcome::VERIFIED, $this->seal->seal($this->session(), $manifest, $this->participant)->status);
+
+        self::assertSame([], $this->receiptService->recordCompletion($second, $this->summary($second, self::SWEEP_2)));
+        $this->em->flush();
+
+        $receipt = $this->receiptFor(self::SWEEP_2);
+        self::assertSame(LabReferenceReceipt::STATUS_INVALID, $receipt?->getStatus());
+        self::assertSame(['step_completion_not_in_manifest'], $receipt?->getReasons(), 'v2 is not relaxed to the enrollment');
+    }
+
+    public function testAV1ManifestCoversAnotherSweepStepOfItsOwnEnrollment(): void
+    {
+        $second = $this->addSweepStep();
+        $manifest = $this->manifest('monad-lab/evidence-manifest/v1', null, [self::SWEEP, self::SWEEP_2]);
+        self::assertSame(SealOutcome::VERIFIED, $this->seal->seal($this->session(), $manifest, $this->participant)->status);
+
+        self::assertSame([], $this->receiptService->recordCompletion($second, $this->summary($second, self::SWEEP_2)));
+        $this->em->flush();
+
+        self::assertSame(LabReferenceReceipt::STATUS_VERIFIED, $this->receiptFor(self::SWEEP_2)?->getStatus());
+    }
+
+    public function testAV1ManifestDoesNotCoverAStepOfAnotherEnrollment(): void
+    {
+        [$foreignEnrollment] = $this->enrol($this->stranger);
+        $foreign = $this->addSweepStep($foreignEnrollment);
+        $manifest = $this->manifest('monad-lab/evidence-manifest/v1', null, [self::SWEEP, self::SWEEP_2]);
+        self::assertSame(SealOutcome::VERIFIED, $this->seal->seal($this->session(), $manifest, $this->participant)->status);
+
+        self::assertSame([], $this->receiptService->recordCompletion($foreign, $this->summary($foreign, self::SWEEP_2)));
+        $this->em->flush();
+
+        $receipt = $this->receiptFor(self::SWEEP_2);
+        self::assertSame(LabReferenceReceipt::STATUS_INVALID, $receipt?->getStatus());
+        self::assertContains('step_completion_not_in_manifest', $receipt?->getReasons() ?? []);
+    }
+
+    public function testAV2ManifestNamingAStepOfAnotherEnrollmentIsInvalid(): void
+    {
+        [, $foreign] = $this->enrol($this->stranger);
+        $manifest = $this->manifest('monad-lab/evidence-manifest/v2',
+            [$this->sweepStep->getId()->toRfc4122(), $foreign->getId()->toRfc4122()]);
+        $outcome = $this->seal->seal($this->session(), $manifest, $this->participant);
+
+        self::assertSame(SealOutcome::INVALID, $outcome->status);
+        self::assertContains(
+            sprintf('step_completion_ids: %s belongs to another enrollment', $foreign->getId()->toRfc4122()),
+            $outcome->reasons,
+        );
+    }
+
+    private function receiptFor(string $sweep): ?LabReferenceReceipt
+    {
+        $this->em->clear();
+
+        return $this->receipts->findForSweep(self::RECORDING, \Symfony\Component\Uid\Uuid::fromString($sweep));
+    }
+
     // ── fixtures ────────────────────────────────────────────────────────────────────────────
 
     private function scrub(): void
@@ -503,8 +584,35 @@ final class EvidenceSealFlowTest extends KernelTestCase
         return $session;
     }
 
-    /** @return array<string, mixed> */
-    private function manifest(): array
+    /**
+     * A second sweep step and its completion, as a multi-zone quest (Zone count) has one observe
+     * step per zone. It carries the first step's config, so the frozen protocol and rooms match.
+     */
+    private function addSweepStep(?QuestEnrollment $enrollment = null): QuestStepCompletion
+    {
+        $enrollment ??= $this->enrollment;
+        $observe = (new QuestStep())->setName('Count the second zone')->setType(QuestStepType::OBSERVE)->setOrder(2)
+            ->setConfig($this->config);
+        $this->quest->addStep($observe);
+        $this->em->persist($observe);
+        $completion = (new QuestStepCompletion())
+            ->setEnrollment($enrollment)
+            ->setStep($observe)
+            ->setStatus(QuestStepCompletionStatus::IN_PROGRESS)
+            ->snapshotStep($observe, 2);
+        $enrollment->addStepCompletion($completion);
+        $this->em->persist($completion);
+        $this->em->flush();
+
+        return $completion;
+    }
+
+    /**
+     * @param list<string>|null $steps v2 only: the listed step completions (default: the first sweep step)
+     * @param list<string>|null $sweeps default: the first sweep
+     * @return array<string, mixed>
+     */
+    private function manifest(string $schema = 'monad-lab/evidence-manifest/v1', ?array $steps = null, ?array $sweeps = null): array
     {
         $artifacts = [];
         foreach ($this->bucket->bytes as $name => $bytes) {
@@ -516,13 +624,18 @@ final class EvidenceSealFlowTest extends KernelTestCase
             ];
         }
 
+        $first = $this->sweepStep->getId()->toRfc4122();
+        $stepField = $schema === 'monad-lab/evidence-manifest/v1'
+            ? ['step_completion_id' => $first]
+            : ['step_completion_ids' => $steps ?? [$first]];
+
         return [
-            'schema' => 'monad-lab/evidence-manifest/v1',
+            'schema' => $schema,
             'recording_session_id' => self::RECORDING,
             'enrollment_id' => $this->enrollment->getId()->toRfc4122(),
             'quest_id' => $this->quest->getId()->toRfc4122(),
-            'step_completion_id' => $this->sweepStep->getId()->toRfc4122(),
-            'sweep_ids' => [self::SWEEP],
+            ...$stepField,
+            'sweep_ids' => $sweeps ?? [self::SWEEP],
             'app_build_id' => 'fixture-build-1',
             'payload_schemas' => ['monad-app/headcount-marker/v3'],
             'snapshot_sha256' => str_repeat('b', 64),
@@ -534,13 +647,13 @@ final class EvidenceSealFlowTest extends KernelTestCase
     }
 
     /** @return array<string, mixed> */
-    private function summary(): array
+    private function summary(?QuestStepCompletion $step = null, string $sweep = self::SWEEP): array
     {
         return [
             'schema' => 'monad-lab/sweep-summary/v1',
             'recording_session_id' => self::RECORDING,
-            'sweep_id' => self::SWEEP,
-            'step_completion_id' => $this->sweepStep->getId()->toRfc4122(),
+            'sweep_id' => $sweep,
+            'step_completion_id' => ($step ?? $this->sweepStep)->getId()->toRfc4122(),
             'protocol_id' => $this->config['protocol_id'],
             'protocol_sha256' => $this->config['protocol_sha256'],
             'room_id' => 'fixture-room-a',

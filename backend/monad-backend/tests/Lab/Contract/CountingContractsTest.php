@@ -148,6 +148,18 @@ final class CountingContractsTest extends TestCase
         self::assertSame($reference['manifest_sha256'], CanonicalJson::sha256($manifest));
     }
 
+    public function testAV2ManifestListsEveryStepCompletionOfAMultiSweepRecording(): void
+    {
+        $manifest = self::load('manifest/valid/sealed-v2-multi-sweep.json')['manifest'];
+        self::assertSame([], CountingContracts::evidenceManifestProblems($manifest));
+        self::assertSame(
+            ['0c000000-0000-4000-8000-00000000000c', '0c000000-0000-4000-8000-00000000000e'],
+            CountingContracts::manifestStepCompletionIds($manifest),
+        );
+        $v1 = self::load('manifest/valid/sealed.json')['manifest'];
+        self::assertSame(['0c000000-0000-4000-8000-00000000000c'], CountingContracts::manifestStepCompletionIds($v1));
+    }
+
     public function testInvalidManifestsAreRefused(): void
     {
         foreach (self::files('manifest/invalid') as $file) {

@@ -20,6 +20,7 @@ final class CountingContracts
     public const SCHEMA_OBSERVE_V2 = 'monad-quest/observe/v2';
     public const SCHEMA_HEADCOUNT_V3 = 'monad-app/headcount-marker/v3';
     public const SCHEMA_EVIDENCE_MANIFEST_V1 = 'monad-lab/evidence-manifest/v1';
+    public const SCHEMA_EVIDENCE_MANIFEST_V2 = 'monad-lab/evidence-manifest/v2';
     public const SCHEMA_SWEEP_SUMMARY_V1 = 'monad-lab/sweep-summary/v1';
 
     /** The software capability a handset must advertise before it is served a sweep quest. */
@@ -232,7 +233,26 @@ final class CountingContracts
     }
 
     /**
-     * Structural rules of `monad-lab/evidence-manifest/v1`, before any byte is fetched.
+     * The step completions a manifest names: v1's scalar as a one-element list, v2's list as is.
+     * Structurally valid manifests only; anything else yields what it can read.
+     *
+     * @param array<string, mixed> $manifest
+     * @return list<string>
+     */
+    public static function manifestStepCompletionIds(array $manifest): array
+    {
+        if (($manifest['schema'] ?? null) === self::SCHEMA_EVIDENCE_MANIFEST_V1) {
+            $one = $manifest['step_completion_id'] ?? null;
+
+            return is_string($one) ? [$one] : [];
+        }
+
+        return array_values(array_filter((array) ($manifest['step_completion_ids'] ?? []), 'is_string'));
+    }
+
+    /**
+     * Structural rules of `monad-lab/evidence-manifest/v1` and `/v2`, before any byte is fetched.
+     * v2 differs in one field: `step_completion_ids` (a list) replaces v1's `step_completion_id`.
      *
      * @param array<string, mixed> $manifest
      * @return list<string>
@@ -240,12 +260,34 @@ final class CountingContracts
     public static function evidenceManifestProblems(array $manifest): array
     {
         $out = [];
-        if (($manifest['schema'] ?? null) !== self::SCHEMA_EVIDENCE_MANIFEST_V1) {
-            $out[] = sprintf('schema: %s is not %s', json_encode($manifest['schema'] ?? null), self::SCHEMA_EVIDENCE_MANIFEST_V1);
+        $schema = $manifest['schema'] ?? null;
+        $v1 = $schema === self::SCHEMA_EVIDENCE_MANIFEST_V1;
+        if (!$v1 && $schema !== self::SCHEMA_EVIDENCE_MANIFEST_V2) {
+            $out[] = sprintf('schema: %s is not %s or %s', json_encode($schema),
+                self::SCHEMA_EVIDENCE_MANIFEST_V1, self::SCHEMA_EVIDENCE_MANIFEST_V2);
         }
-        foreach (['recording_session_id', 'enrollment_id', 'quest_id', 'step_completion_id'] as $field) {
+        $identities = ['recording_session_id', 'enrollment_id', 'quest_id'];
+        if ($v1) {
+            $identities[] = 'step_completion_id';
+        }
+        foreach ($identities as $field) {
             if (!self::matches($manifest[$field] ?? null, self::UUID)) {
                 $out[] = sprintf('%s: a lower-case UUID is required', $field);
+            }
+        }
+        if (!$v1) {
+            $steps = $manifest['step_completion_ids'] ?? null;
+            if (!is_array($steps) || !array_is_list($steps) || $steps === []) {
+                $out[] = 'step_completion_ids: a non-empty list is required';
+            } else {
+                foreach ($steps as $i => $step) {
+                    if (!self::matches($step, self::UUID)) {
+                        $out[] = sprintf('step_completion_ids/%d: a lower-case UUID is required', $i);
+                    }
+                }
+                if (count(array_unique($steps, SORT_REGULAR)) !== count($steps)) {
+                    $out[] = 'step_completion_ids: must be unique';
+                }
             }
         }
         $sweeps = $manifest['sweep_ids'] ?? null;
@@ -325,7 +367,8 @@ final class CountingContracts
         if (!is_int($manifest['sealed_wall_ms'] ?? null) || $manifest['sealed_wall_ms'] < 0) {
             $out[] = 'sealed_wall_ms: a non-negative integer is required';
         }
-        $allowed = ['schema', 'recording_session_id', 'enrollment_id', 'quest_id', 'step_completion_id', 'sweep_ids',
+        $allowed = ['schema', 'recording_session_id', 'enrollment_id', 'quest_id',
+            $v1 ? 'step_completion_id' : 'step_completion_ids', 'sweep_ids',
             'app_build_id', 'payload_schemas', 'snapshot_sha256', 'clock_domain', 'artifacts', 'sealed_mono_ns',
             'sealed_wall_ms'];
         foreach (array_diff(array_keys($manifest), $allowed) as $key) {

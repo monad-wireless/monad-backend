@@ -44,6 +44,8 @@ final class ReconcileLabEvidenceCommand extends Command
     {
         $this
             ->addOption('limit', null, InputOption::VALUE_REQUIRED, 'Stop after this many pending seals', '200')
+            ->addOption('recording', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY,
+                'Also re-reconcile every receipt of this recording, settled ones included (not conflicts). Repeatable. For a rule change, e.g. v1 multi-sweep manifests (2026-10-28).')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'List what would be re-verified and write nothing');
     }
 
@@ -70,8 +72,12 @@ final class ReconcileLabEvidenceCommand extends Command
         }
 
         $pendingReceipts = $this->receipts->findPending();
-        $recordings = array_values(array_unique(array_map(static fn ($r) => $r->getRecordingSessionId(), $pendingReceipts)));
-        $io->section(sprintf('%d pending receipt(s) across %d recording(s)', count($pendingReceipts), count($recordings)));
+        $named = array_values(array_filter((array) $input->getOption('recording'), 'is_string'));
+        $recordings = array_values(array_unique([
+            ...array_map(static fn ($r) => $r->getRecordingSessionId(), $pendingReceipts),
+            ...$named,
+        ]));
+        $io->section(sprintf('%d pending receipt(s), %d named recording(s): %d recording(s) to reconcile', count($pendingReceipts), count($named), count($recordings)));
         if (!$dryRun) {
             foreach ($recordings as $recording) {
                 $this->receiptService->reconcileRecording($recording);

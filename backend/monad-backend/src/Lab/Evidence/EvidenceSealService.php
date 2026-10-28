@@ -179,11 +179,15 @@ final class EvidenceSealService
             if ($enrollment->getQuest()?->getId()?->toRfc4122() !== $manifest['quest_id']) {
                 $out[] = 'quest_id: does not match the enrollment\'s quest';
             }
-            $step = $this->em->getRepository(QuestStepCompletion::class)->find(Uuid::fromString($manifest['step_completion_id']));
-            if (!$step instanceof QuestStepCompletion) {
-                $out[] = 'step_completion_id: unknown';
-            } elseif ($step->getEnrollment()?->getId()?->toRfc4122() !== $enrollment->getId()?->toRfc4122()) {
-                $out[] = 'step_completion_id: belongs to another enrollment';
+            $field = ($manifest['schema'] ?? null) === CountingContracts::SCHEMA_EVIDENCE_MANIFEST_V1
+                ? 'step_completion_id' : 'step_completion_ids';
+            foreach (CountingContracts::manifestStepCompletionIds($manifest) as $stepId) {
+                $step = $this->em->getRepository(QuestStepCompletion::class)->find(Uuid::fromString($stepId));
+                if (!$step instanceof QuestStepCompletion) {
+                    $out[] = sprintf('%s: %s unknown', $field, $stepId);
+                } elseif ($step->getEnrollment()?->getId()?->toRfc4122() !== $enrollment->getId()?->toRfc4122()) {
+                    $out[] = sprintf('%s: %s belongs to another enrollment', $field, $stepId);
+                }
             }
         } else {
             // The register resolved no enrollment: the sidecar named none, or one this database

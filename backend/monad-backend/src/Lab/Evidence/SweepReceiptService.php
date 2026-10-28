@@ -131,11 +131,11 @@ final class SweepReceiptService
         if (!in_array($receipt->getSweepId()->toRfc4122(), $accepted->getSweepIds(), true)) {
             $reasons[] = 'sweep_not_in_manifest';
         }
+        $manifest = $accepted->getManifest();
         $step = $receipt->getStepCompletionId()?->toRfc4122();
-        if ($step === null || $accepted->getStepCompletionId() !== $step) {
+        if ($step === null || !$this->manifestCoversStep($accepted, $step)) {
             $reasons[] = 'step_completion_not_in_manifest';
         }
-        $manifest = $accepted->getManifest();
         $enrollment = $receipt->getEnrollmentId()?->toRfc4122();
         if ($enrollment === null || ($manifest['enrollment_id'] ?? null) !== $enrollment) {
             $reasons[] = 'enrollment_not_in_manifest';
@@ -149,5 +149,25 @@ final class SweepReceiptService
             $reasons,
             $now,
         );
+    }
+
+    /**
+     * A v2 manifest covers the steps it lists. A v1 manifest names one step completion even when
+     * the recording carried several sweep steps (Zone count, 2026-10-28), so for v1 alone a step
+     * completion that belongs to the manifest's enrollment is covered too. That is weaker than
+     * v2's list and exists only to recover recordings sealed before v2.
+     */
+    private function manifestCoversStep(LabEvidenceManifest $accepted, string $step): bool
+    {
+        if (in_array($step, $accepted->getStepCompletionIds(), true)) {
+            return true;
+        }
+        if (!$accepted->isV1()) {
+            return false;
+        }
+        $completion = $this->em->getRepository(QuestStepCompletion::class)->find(Uuid::fromString($step));
+
+        return $completion instanceof QuestStepCompletion
+            && $completion->getEnrollment()?->getId()?->toRfc4122() === ($accepted->getManifest()['enrollment_id'] ?? null);
     }
 }
