@@ -1,0 +1,28 @@
+{
+  "description": "A valid observe v2 configuration with the optional plan image (added 2026-10-26). The image URL is part of the digest. Identifiers are synthetic.",
+  "config": {
+    "schema": "monad-quest/observe/v2",
+    "mode": "room_sweep_cumulative",
+    "description": "Fixture only. Identifiers are synthetic and name no real room.",
+    "prompt": "People counted so far",
+    "protocol_id": "fixture-zone-sweep",
+    "rooms": [
+      {
+        "room_id": "fixture-zone-a",
+        "floor_id": "test-lab-synth-floor-0",
+        "label": "Fixture zone A",
+        "geometry_version": "g1",
+        "coverage_version": "c1",
+        "coverage_instructions": "Count everyone inside the shaded area once."
+      }
+    ],
+    "checkpoints": {
+      "min_checkpoints": 0,
+      "required_for_complete": false
+    },
+    "observer_convention": "exclude_self",
+    "max_count": null,
+    "image": "https://example.invalid/lab/zone-map.svg?part=fixture-zone-a",
+    "protocol_sha256": "2119230115880380270da6204702c4ab3aeb2bab44c6cad242a46a7a15126847"
+  }
+}

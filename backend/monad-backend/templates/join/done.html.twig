@@ -1,0 +1,17 @@
+{% extends 'join/_layout.html.twig' %}
+
+{# The confirmation, adapted from the retired Google Form's confirmation message. The same page
+   for a real signup, a duplicate and a honeypot hit, so nothing about known addresses leaks. #}
+
+{% block title %}Thanks, your interest is recorded{% endblock %}
+
+{% block body %}
+    <h1>Thanks, your interest is recorded.</h1>
+    <p>I’ll email you when I can offer a suitable place.</p>
+    <p>There is nothing to install yet. Joining this list does not enrol you in a study; an invitation will explain the task, expected time and data recorded, so you can decide then.</p>
+    <p>Questions or a change of plans? Write to <a href="mailto:jakub.dubec@stuba.sk">jakub.dubec@stuba.sk</a>.</p>
+    <p class="muted sig">Jakub Dubec, FIIT STU Bratislava</p>
+    <div class="note">
+        <p style="margin:0"><a href="{{ terms_url }}">Terms</a> · <a href="{{ privacy_url }}">Privacy policy</a></p>
+    </div>
+{% endblock %}

@@ -1,0 +1,84 @@
+{% extends 'join/_layout.html.twig' %}
+
+{#
+  Wording adapted from the retired Google Form (repos/monad-app/STUDENT-BETA-FORMS.md): the
+  description, the six questions, the contact-data note and the retention sentence. The consent
+  sentence itself comes from App\Join\JoinConsent, beside its version. Works with scripts off:
+  plain POST, errors rendered server-side, values kept.
+#}
+
+{% block body %}
+    <h1>Want to help test the little boxes in the FIIT library?</h1>
+
+    <p>MonadCount investigates how Wi-Fi and Bluetooth measurements can help us understand how busy a room is. I’m preparing an invitation-only student beta of the companion app. App-store access is planned later.</p>
+    <p>Leave your email if you’d like an invitation when I can include you. You may be asked to try a short measurement task at FIIT and tell me how the app behaved. No experience with wireless sensing is needed. Bugs are welcome; they were probably coming anyway.</p>
+    <p>This page expresses interest. It does not reserve a place or enrol you in a research session. An invitation will explain the task, expected time and data recorded, so you can decide then.</p>
+    <p class="muted sig">Jakub Dubec, FIIT STU Bratislava · <a href="mailto:jakub.dubec@stuba.sk">jakub.dubec@stuba.sk</a></p>
+
+    {% if limited %}
+        <div class="notice fault" role="alert">
+            <p style="margin:0">That is more signups than this page accepts from one connection in an hour. Please try again later, or write to <a href="mailto:jakub.dubec@stuba.sk">jakub.dubec@stuba.sk</a>.</p>
+        </div>
+    {% elseif errors is not empty %}
+        <div class="notice" role="alert">
+            <p style="margin:0">Not sent yet: please check the marked fields below.</p>
+        </div>
+    {% endif %}
+
+    <form method="post" action="{{ path('join') }}" novalidate>
+        <input type="hidden" name="src" value="{{ values.src ?? '' }}">
+
+        <div class="field{{ errors.email is defined ? ' bad' }}">
+            <label for="email">Email address</label>
+            <span class="help">Use an address where you would like to receive your invitation.</span>
+            <input type="email" id="email" name="email" value="{{ values.email ?? '' }}" maxlength="180" autocomplete="email" required{% if errors.email is defined %} aria-invalid="true" aria-describedby="email-error"{% endif %}>
+            {% if errors.email is defined %}<p class="error" id="email-error">{{ errors.email }}</p>{% endif %}
+        </div>
+
+        <div class="field{{ errors.name is defined ? ' bad' }}">
+            <label for="name">What should I call you? <span class="muted">(optional)</span></label>
+            <span class="help">A first name is enough.</span>
+            <input type="text" id="name" name="name" value="{{ values.name ?? '' }}" maxlength="80" autocomplete="given-name">
+            {% if errors.name is defined %}<p class="error">{{ errors.name }}</p>{% endif %}
+        </div>
+
+        <fieldset class="field" style="border:0;padding:0;margin:0 0 1.25rem">
+            <legend class="q" style="font-weight:600;padding:0;margin-bottom:0.25rem">Which phone would you use?</legend>
+            {% for value, label in {android: 'Android', ios: 'iPhone', unsure: 'I’m not sure / I don’t have a suitable phone'} %}
+                <label class="choice"><input type="radio" name="platform" value="{{ value }}"{{ (values.platform ?? null) == value ? ' checked' }} required> <span>{{ label }}</span></label>
+            {% endfor %}
+            {% if errors.platform is defined %}<p class="error">{{ errors.platform }}</p>{% endif %}
+        </fieldset>
+
+        <fieldset class="field" style="border:0;padding:0;margin:0 0 1.25rem">
+            <legend class="q" style="font-weight:600;padding:0;margin-bottom:0.25rem">Could you join a short session at FIIT in Bratislava?</legend>
+            {% for value, label in {yes: 'Yes', sometimes: 'Sometimes, depending on the time', remote: 'Not in person, but I’m interested in testing the app'} %}
+                <label class="choice"><input type="radio" name="availability" value="{{ value }}"{{ (values.availability ?? null) == value ? ' checked' }} required> <span>{{ label }}</span></label>
+            {% endfor %}
+            {% if errors.availability is defined %}<p class="error">{{ errors.availability }}</p>{% endif %}
+        </fieldset>
+
+        <div class="field">
+            <span class="q">Beta invitations</span>
+            <label class="choice"><input type="checkbox" name="consent" value="1"{{ (values.consent ?? false) ? ' checked' }} required> <span>{{ consent_text }}</span></label>
+            {% if errors.consent is defined %}<p class="error">{{ errors.consent }}</p>{% endif %}
+        </div>
+
+        <div class="field">
+            <span class="q">Project updates <span class="muted" style="font-weight:400">(optional)</span></span>
+            <label class="choice"><input type="checkbox" name="updates" value="1"{{ (values.updates ?? false) ? ' checked' }}> <span>I’d also like occasional emails about MonadCount results and future ways to take part.</span></label>
+        </div>
+
+        <div class="hp" aria-hidden="true">
+            <label for="website">Website</label>
+            <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+        </div>
+
+        <button type="submit" class="btn">Ask for an invitation</button>
+    </form>
+
+    <div class="note">
+        <p>Jakub Dubec (FIIT STU Bratislava) uses your answers to organise beta invitations and test sessions. Project updates are sent only if you tick the box above. Your signup is stored in the project’s own database; your email will not be put into the public research dataset. A signup that is not followed by an account in the app is deleted {{ retention_days }} days after the invitation, or {{ retention_days }} days after signing up if no invitation is sent. To leave either list or to have your signup deleted, write to <a href="mailto:jakub.dubec@stuba.sk">jakub.dubec@stuba.sk</a>.</p>
+        <p style="margin:0"><a href="{{ terms_url }}">Terms</a> · <a href="{{ privacy_url }}">Privacy policy</a> · consent text {{ consent_version }}</p>
+    </div>
+{% endblock %}

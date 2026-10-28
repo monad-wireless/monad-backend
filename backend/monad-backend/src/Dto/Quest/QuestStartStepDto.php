@@ -18,14 +18,29 @@ class QuestStartStepDto
     ) {
     }
 
-    public static function fromEntities(QuestStep $step, QuestStepCompletion $completion): self
-    {
+    /**
+     * @param int|null $order Overrides the step's own order (IP-145).
+     *
+     * A pooled quest declares every legal target and asks each walker for a subset of them,
+     * in an order chosen at enrollment. The step ROWS are shared by every enrollment and must
+     * not be renumbered, so the realised sequence is expressed here, per response.
+     *
+     * Renumbered rather than merely re-listed because the client's ordering is not something
+     * this DTO can assume: a handset that sorts by `order` would otherwise walk the declared
+     * sequence while the server believed it had asked for another, and the symptom is a route
+     * that looks fine and pairs with nothing.
+     */
+    public static function fromEntities(
+        QuestStep $step,
+        QuestStepCompletion $completion,
+        ?int $order = null,
+    ): self {
         return new self(
             stepId: $step->getId(),
             stepCompletionId: $completion->getId(),
             name: $step->getName(),
             type: $step->getType()->value,
-            order: $step->getOrder(),
+            order: $order ?? $step->getOrder(),
             config: $step->getConfig()
         );
     }

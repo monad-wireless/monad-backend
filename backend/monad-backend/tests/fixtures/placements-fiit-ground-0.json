@@ -1,0 +1,377 @@
+{
+  "floor": "fiit-ground-0",
+  "layer_cards": "fiit-ground-markers",
+  "layer_nodes": "fiit-ground-fleet",
+  "placements": [
+    {
+      "key": "monad01",
+      "kind": "node",
+      "room": "library-open",
+      "x_m": 9.681,
+      "y_m": 11.767,
+      "z_cm": 90.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "monad02",
+      "kind": "node",
+      "room": "library-open",
+      "x_m": 14.376,
+      "y_m": 6.267,
+      "z_cm": 90.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "monad03",
+      "kind": "node",
+      "room": "library-open",
+      "x_m": 18.377,
+      "y_m": 13.508,
+      "z_cm": 90.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "monad04",
+      "kind": "node",
+      "room": "library-open",
+      "x_m": 4.163,
+      "y_m": 8.748,
+      "z_cm": 90.0,
+      "provenance": "manual",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "monad05",
+      "kind": "node",
+      "room": "library-open",
+      "x_m": 8.559,
+      "y_m": 17.634,
+      "z_cm": 90.0,
+      "provenance": "manual",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "monad06",
+      "kind": "node",
+      "room": "library-open",
+      "x_m": 9.507,
+      "y_m": 7.009,
+      "z_cm": 90.0,
+      "provenance": "manual",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "monad07",
+      "kind": "node",
+      "room": "library-silent",
+      "x_m": 3.031,
+      "y_m": 22.329,
+      "z_cm": 90.0,
+      "provenance": "manual",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "monad08",
+      "kind": "node",
+      "room": "library-open",
+      "x_m": 16.931,
+      "y_m": 9.357,
+      "z_cm": 90.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "monad09",
+      "kind": "node",
+      "room": "library-silent",
+      "x_m": 10.02,
+      "y_m": 21.19,
+      "z_cm": 90.0,
+      "provenance": "manual",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "monad10",
+      "kind": "node",
+      "room": "library-open",
+      "x_m": 3.182,
+      "y_m": 5.206,
+      "z_cm": 90.0,
+      "provenance": "manual",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-01",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 9.995,
+      "y_m": 6.161,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-02",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 12.927,
+      "y_m": 8.975,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-03",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 15.162,
+      "y_m": 12.234,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-04",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 18.84,
+      "y_m": 10.262,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-05",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 20.974,
+      "y_m": 17.274,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-06",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 11.686,
+      "y_m": 15.054,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-07",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 8.41,
+      "y_m": 18.941,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-08",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 5.789,
+      "y_m": 15.505,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-09",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 5.958,
+      "y_m": 12.158,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-10",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 18.229,
+      "y_m": 18.359,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-11",
+      "kind": "card",
+      "room": null,
+      "x_m": 0.002,
+      "y_m": 6.203,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-12",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 10.763,
+      "y_m": 11.75,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-13",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 2.924,
+      "y_m": 8.414,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-14",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 0.209,
+      "y_m": 14.191,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-15",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 11.523,
+      "y_m": 1.8,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-16",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 7.527,
+      "y_m": 10.001,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-17",
+      "kind": "card",
+      "room": "library-silent",
+      "x_m": 7.514,
+      "y_m": 19.767,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-18",
+      "kind": "card",
+      "room": "library-silent",
+      "x_m": 9.084,
+      "y_m": 22.764,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-19",
+      "kind": "card",
+      "room": "library-silent",
+      "x_m": 5.245,
+      "y_m": 20.306,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-FP-20",
+      "kind": "card",
+      "room": "library-silent",
+      "x_m": 4.143,
+      "y_m": 22.06,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-22T13:46:19.689584+00:00"
+    },
+    {
+      "key": "MONAD-OPEN-D1-OUT",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 11.565,
+      "y_m": 18.989,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-25T15:53:27.341800+00:00"
+    },
+    {
+      "key": "MONAD-OPEN-D3-IN",
+      "kind": "card",
+      "room": "library-silent",
+      "x_m": 1.297,
+      "y_m": 20.285,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-25T15:53:34.043139+00:00"
+    },
+    {
+      "key": "MONAD-OPEN-D3-OUT",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 1.321,
+      "y_m": 19.441,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-25T15:53:42.151175+00:00"
+    },
+    {
+      "key": "MONAD-SILENT-D1-IN",
+      "kind": "card",
+      "room": null,
+      "x_m": 11.764,
+      "y_m": 19.185,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-25T15:53:45.797808+00:00"
+    },
+    {
+      "key": "MONAD-SILENT-D1-OUT",
+      "kind": "card",
+      "room": "library-open",
+      "x_m": 10.815,
+      "y_m": 19.022,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-25T15:53:47.995758+00:00"
+    },
+    {
+      "key": "MONAD-SILENT-D2-IN",
+      "kind": "card",
+      "room": "library-silent",
+      "x_m": 4.288,
+      "y_m": 24.937,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-25T15:53:50.092027+00:00"
+    },
+    {
+      "key": "MONAD-SILENT-D2-OUT",
+      "kind": "card",
+      "room": "library-silent",
+      "x_m": 5.476,
+      "y_m": 24.746,
+      "z_cm": 140.0,
+      "provenance": "lidar",
+      "source_updated_at": "2026-08-25T15:53:52.100801+00:00"
+    }
+  ]
+}

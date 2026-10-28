@@ -1,0 +1,38 @@
+{
+  "description": "Canonicalisation vectors. `canonical` is the exact UTF-8 text a conforming implementation must produce for `input`; `sha256` is its digest. Keys sort by Unicode code point, no whitespace, non-ASCII written as itself, `/` unescaped, C0 controls other than \\b \\f \\n \\r \\t as \\u00XX. Floats are forbidden and have no vector on purpose.",
+  "vectors": [
+    {
+      "name": "key-order-and-literals",
+      "input": {"b": 1, "a": [true, null, "x"]},
+      "canonical": "{\"a\":[true,null,\"x\"],\"b\":1}",
+      "sha256": "54a65415ad370228851a1da4b31b6fd42dc58b19a50d35cae759325f7388ce64"
+    },
+    {
+      "name": "unicode-slash-quote-tab",
+      "input": {"z": {"y": "žluťoučký kůň", "x": "tab\there"}, "a": "slash/quote\""},
+      "canonical": "{\"a\":\"slash/quote\\\"\",\"z\":{\"x\":\"tab\\there\",\"y\":\"žluťoučký kůň\"}}",
+      "sha256": "6f65438472468d146611d8319814b3e091186f78a97cd4c524294864c7fdb30a"
+    },
+    {
+      "name": "nanosecond-string-and-control-char",
+      "input": {"mono_ns": "1234567890123456789", "wall_ms": 1758441600000, "nested": {"k": [1, 2, {"c": "\u0001"}]}},
+      "canonical": "{\"mono_ns\":\"1234567890123456789\",\"nested\":{\"k\":[1,2,{\"c\":\"\\u0001\"}]},\"wall_ms\":1758441600000}",
+      "sha256": "1eecfc4372e3802312bed0d2186866dc6b7cac353d832f6a8980f22b8efc648b"
+    },
+    {
+      "name": "empty-object",
+      "input": {},
+      "canonical": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "name": "empty-array",
+      "input": [],
+      "canonical": "[]",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  ],
+  "rejected": [
+    {"name": "float-forbidden", "input": {"a": 1.5}, "reason": "floating-point number"}
+  ]
+}

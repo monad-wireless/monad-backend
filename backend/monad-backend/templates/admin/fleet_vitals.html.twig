@@ -1,0 +1,70 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block content_title %}Fleet vitals{% endblock %}
+
+{% block main %}
+    {% if not fleet.reachable %}
+        <div class="alert alert-warning mb-3">
+            The metrics store could not be read (or <code>MONAD_METRICS_URL</code> is unset). This is a different fact
+            from a resting fleet, and no number below is shown in its place.
+        </div>
+    {% else %}
+        <div class="strip">
+            <span><span class="k">Read</span>{{ fleet.read_at|clock }}</span>
+            {% for key, value in fleet.scalars %}
+                <span><span class="k">{{ key|replace({'_': ' '}) }}</span>{{ value|round(2) }}</span>
+            {% endfor %}
+        </div>
+
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-sm table-dense mb-0">
+                    <thead>
+                        <tr>
+                            <th>Node</th>
+                            <th>Capture process</th>
+                            <th class="num">CSI Hz</th>
+                            <th class="num">Monitor frames/s</th>
+                            <th class="num">SoC °C</th>
+                            <th class="num">Headroom °C</th>
+                            <th class="num">NIC °C</th>
+                            <th class="num">CPU %</th>
+                            <th class="num">Memory %</th>
+                            <th class="num">Uptime</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for host, node in fleet.nodes %}
+                            {% set v = node.values %}
+                            <tr>
+                                <td><code>{{ host }}</code></td>
+                                <td>
+                                    {% if node.capture_active is null %}<span class="state state-muted">no csid</span>
+                                    {% elseif node.capture_active %}<span class="state state-ok">up</span>
+                                    {% else %}<span class="state state-warn">resting</span>{% endif %}
+                                </td>
+                                <td class="num">{{ node.capture_rate_hz is null ? '—' : node.capture_rate_hz|round(1) }}</td>
+                                <td class="num">{{ v.monitor_frames_per_s is defined ? v.monitor_frames_per_s|round : '—' }}</td>
+                                <td class="num {{ v.soc_temp_c is defined and v.soc_temp_c >= 80 ? 'state-bad' : '' }}">{{ v.soc_temp_c is defined ? v.soc_temp_c|round(1) : '—' }}</td>
+                                <td class="num">{{ v.thermal_headroom_c is defined ? v.thermal_headroom_c|round(1) : '—' }}</td>
+                                <td class="num">{{ v.nic_temp_c is defined ? v.nic_temp_c|round(1) : '—' }}</td>
+                                <td class="num">{{ v.cpu_busy_pct is defined ? v.cpu_busy_pct|round : '—' }}</td>
+                                <td class="num">{{ v.memory_used_pct is defined ? v.memory_used_pct|round : '—' }}</td>
+                                <td class="num">{{ v.uptime_seconds is defined ? v.uptime_seconds|duration : '—' }}</td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="10" class="text-muted">No node reported.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-body pt-2 pb-2">
+                <p class="text-muted small mb-0">
+                    "Capture process" is csid's heartbeat; "CSI Hz" is records landing. They are two facts and stay two columns:
+                    on 2026-08-15 five nodes reported the first and one the second. A dash is a series the node does not export,
+                    not a zero. Same allow-list as the public <code>/fleet/</code> page (<code>FleetMetricsReader</code>).
+                </p>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}

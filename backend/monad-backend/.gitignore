@@ -13,3 +13,13 @@
 ###> lexik/jwt-authentication-bundle ###
 /config/jwt/*.pem
 ###< lexik/jwt-authentication-bundle ###
+
+# The lab bundle describes a specific deployment and carries real credentials:
+# access_points[].password is an AP passphrase and collector.host is a private address.
+# lab.example.json (committed) is the shape; lab.json is the rig.
+/config/lab/lab.json
+
+###> phpunit/phpunit ###
+/phpunit.xml
+/.phpunit.cache/
+###< phpunit/phpunit ###

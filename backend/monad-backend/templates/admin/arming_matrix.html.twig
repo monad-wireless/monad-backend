@@ -1,0 +1,64 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block breadcrumb %}<a href="{{ path('admin_lab') }}">Lab</a> / Arming{% endblock %}
+
+{% block content_title %}Arming matrix{% endblock %}
+
+{% block main %}
+    {{ include('admin/_lab_tabs.html.twig', {active: 'Arming'}) }}
+
+    <p class="text-muted small">
+        One row per quest, one column per node — every node, inactive ones included. A cell says two independent
+        things: whether the quest is <strong>armed</strong> at that node (empty arming means every node), and
+        whether it is <strong>available</strong> right now with the unfiltered reason. The same service the phones
+        and the public device page use, so this table cannot disagree with them.
+        Reasons: <code>window_closed</code> (outside the quest's dates), <code>not_armed</code>, <code>device_inactive</code>,
+        <code>node_idle</code> (a measurement quest at a node that is not capturing).
+    </p>
+
+    <div class="card">
+        {# `matrix-wrap` is what admin.css hangs the sideways-scroll affordance on: five fixed
+           columns plus one per node never fit a screen, and macOS draws an overlay scrollbar
+           that says so only after you have already guessed. #}
+        <div class="table-responsive matrix-wrap">
+            <table class="table table-sm table-dense matrix mb-0">
+                <thead>
+                    <tr>
+                        <th>Quest</th>
+                        <th>Audience</th>
+                        <th>Window</th>
+                        <th>Replay</th>
+                        <th>Needs</th>
+                        {% for slug in matrix.devices %}<th class="cell"><code>{{ slug }}</code></th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in matrix.rows %}
+                        <tr>
+                            <td><a href="{{ path('admin_quest_analytics', {id: row.id}) }}">{{ row.name }}</a>{% if row.produces_measurement %} <span class="state state-muted">measures</span>{% endif %}</td>
+                            <td>{{ row.audience }}</td>
+                            {# A window is two instants, and an instant is atomic. `wrap` let the
+                               cell break `2026-08-13 12:00` across four lines once the node
+                               columns squeezed it to 76px, which made every row 151px tall. #}
+                            <td class="window"><small>{{ row.available_from ? row.available_from|date('Y-m-d H:i') : '—' }} → {{ row.available_to ? row.available_to|date('Y-m-d H:i') : 'open' }}</small></td>
+                            <td class="wrap"><small>{{ row.recurrence ? row.recurrence|json_encode : 'unlimited' }}</small></td>
+                            <td class="wrap"><small>{{ row.required_capabilities|join(' ') ?: '—' }}</small></td>
+                            {% for cell in row.devices %}
+                                <td class="cell">
+                                    {% if cell.availability.available %}
+                                        <span class="state state-ok">{{ cell.armed ? 'armed' : 'open' }}</span>
+                                    {% else %}
+                                        <span class="state {{ cell.availability.reason == 'not_armed' ? 'state-muted' : 'state-warn' }}">{{ cell.armed ? 'armed' : 'not armed' }}</span>
+                                        <span class="why">{{ cell.availability.reason }}</span>
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="{{ 5 + matrix.devices|length }}" class="text-muted">No quests.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

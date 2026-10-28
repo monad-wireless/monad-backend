@@ -1,0 +1,70 @@
+{
+  "description": "A study that names public participants as the primary cohort is refused (IP-162 Q2).",
+  "expect_problem": "primary_cohort",
+  "study": {
+    "schema": "monad-lab/study/v1",
+    "study_id": "fixture-f2-recovery",
+    "version": 1,
+    "experiment": "EXP-F2",
+    "hypothesis": "ble-periodic-calibration",
+    "site": "fixture-site",
+    "floor_id": "test-lab-synth-floor-0",
+    "rooms": ["fixture-room-a"],
+    "primary_cohort": "public_participant",
+    "reference_protocol": {
+      "protocol_id": "fixture-room-sweep",
+      "protocol_sha256": "b33e25d256344f01b2991c38afda5dc1592ba801a6cb6e17fac120f3ebc1e24a",
+      "coverage_version": "c1",
+      "stable_only": true
+    },
+    "capture_configuration": {
+      "arm": "fixture-occupancy-study-arm",
+      "channel": 48,
+      "width": "HT20",
+      "transmitter": "fixture-tx",
+      "transmitter_mac": "02:00:00:00:00:01",
+      "receivers": ["fixture-rx-1"],
+      "record_class": "fixture-record-class",
+      "firmware": "fixture-firmware-1",
+      "reduction_version": "fixture-reduction-1",
+      "warmup_minutes": 30
+    },
+    "feature_rule": {
+      "feature_set_id": "fixture-feature-set-1",
+      "feature_set_sha256": "b1b0d842f0a127f44bbe9f2fdb79dba984a40dffcfc8cf00d7844940fa7ff4a1",
+      "min_delivered_rate_hz": 10,
+      "missing_doppler_policy": "unavailable_never_zero"
+    },
+    "window_rule": {"aggregation": "sweep_interval_mean", "tolerance_ns": "2000000000"},
+    "development": {"start": "2026-09-22", "end": "2026-10-05"},
+    "evaluation": {"start": "2026-10-06", "end": "2026-11-01"},
+    "role_assignment": {"calibration_weekdays": ["tue"], "test_weekdays": ["wed", "fri"], "appointments_local": ["10:30"]},
+    "comparators": [
+      {"comparator_id": "frozen", "kind": "frozen", "applicable": true, "note": ""},
+      {"comparator_id": "constant", "kind": "constant_baseline", "applicable": true, "note": ""}
+    ],
+    "model_artifacts": [
+      {
+        "model_id": "fixture-model-1",
+        "model_sha256": "494be1e608d3a291012d234fdf6daa2726da8c7e7ee529bdd7bdedb3ea190bfb",
+        "code_sha256": "ac67a1359506727b5079f7586e2b872a48e4aaf7150ecc7e134131aa2753eddf",
+        "fit_inputs_sha256": "6f1d850938c0a5ca2eccf528e9cb82db8516532ea41f3df1174dc5adaba243e5"
+      }
+    ],
+    "update_rule": {"reference_budget": 2, "min_positive_count_support": 3, "withhold_on_rank_deficiency": true},
+    "reporting_policy": {"interval_levels": [90], "withhold_allowed": true, "common_support_rule": "x"},
+    "primary_outcome": {
+      "metric": "paired_abs_count_error_difference",
+      "unit": "held_out_day",
+      "aggregation": "mean_within_day_then_paired"
+    },
+    "stopping_rule": {
+      "planned_weeks": 4,
+      "smallest_useful_improvement": "x",
+      "precision_target": "x",
+      "no_data_dependent_stopping": true
+    },
+    "frozen_at": "2026-10-05T18:00:00+02:00",
+    "frozen_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

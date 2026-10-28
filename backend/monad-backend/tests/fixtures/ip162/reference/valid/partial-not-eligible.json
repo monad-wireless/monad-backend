@@ -1,0 +1,44 @@
+{
+  "description": "The reference projected from events/valid/sweep-finalise-partial-coverage.json. A valid document that is NOT eligible: coverage partial, occupancy changed, observers unknown (so no RF population), clock fit abstained (so no reference timestamps). Kept, with every reason stated.",
+  "reference": {
+    "schema": "monad-lab/count-reference/v1",
+    "reference_id": "ce000000-0000-4000-8000-000000000002",
+    "revision": 1,
+    "parent_reference_id": null,
+    "cohort": "public_participant",
+    "recording_session_id": "0f000000-0000-4000-8000-00000000000a",
+    "sweep_id": "5e000000-0000-4000-8000-000000000001",
+    "manifest_sha256": "c7777fcec79b0e83c9524f4a99c623e9c55b9b5f93db38eb41a9cbb150d37fed",
+    "final_event_id": "e0000000-0000-4000-8000-000000000003",
+    "protocol_id": "fixture-room-sweep",
+    "protocol_sha256": "b33e25d256344f01b2991c38afda5dc1592ba801a6cb6e17fac120f3ebc1e24a",
+    "mode": "room_sweep_cumulative",
+    "floor_id": "test-lab-synth-floor-0",
+    "room_id": "fixture-room-a",
+    "coverage_version": "c1",
+    "sweep_start_mono_ns": "100000000000",
+    "sweep_end_mono_ns": "160000000000",
+    "sweep_start_ref_ns": null,
+    "sweep_end_ref_ns": null,
+    "time_uncertainty_ns": null,
+    "clock_fit_id": null,
+    "human_count_excluding_observers": 3,
+    "observers_in_area": null,
+    "rf_population_count": null,
+    "coverage": "partial",
+    "occupancy_stability": "changed",
+    "activity": "moving",
+    "duplicate_risk": "unknown",
+    "checkpoints": [
+      {"event_id": "e0000000-0000-4000-8000-000000000002", "sequence": 2, "count": 3, "mono_ns": "130000000000", "corrected_by": null}
+    ],
+    "corrections": 0,
+    "eligibility": {
+      "human_observation": true,
+      "completed_sweep": false,
+      "stable_room_reference": false,
+      "reasons": ["coverage_partial", "occupancy_changed", "observers_unknown", "clock_fit_abstained"]
+    },
+    "projection_version": "count-reference-projection-1"
+  }
+}
