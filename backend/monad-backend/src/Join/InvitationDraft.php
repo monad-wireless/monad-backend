@@ -15,6 +15,12 @@ use Twig\Environment;
 /** A downloadable message, with no transport and no signup state changes. */
 final class InvitationDraft
 {
+    /**
+     * The rolling Android beta. monad-app's `android-beta.yml` republishes it on every push to
+     * feature/refactor, so the address never changes (monad-app ANDROID-BETA.md).
+     */
+    public const ANDROID_APK_URL = 'https://github.com/monad-wireless/monad-app/releases/download/android-latest/monad-app.apk';
+
     public function __construct(private readonly Environment $twig)
     {
     }
@@ -28,11 +34,11 @@ final class InvitationDraft
         $template = $this->twig->load('join/invitation.txt.twig');
         $context = [
             'name' => $signup->getName(),
-            'platform' => match ($signup->getPlatform()) {
-                BetaPlatform::IOS => 'iPhone',
-                BetaPlatform::ANDROID => 'Android',
-                BetaPlatform::UNSURE => 'iPhone alebo Android',
-            },
+            // iPhone installs through a TestFlight invitation, Android from the APK link. An unsure
+            // signup gets both install sections.
+            'ios' => BetaPlatform::ANDROID !== $signup->getPlatform(),
+            'android' => BetaPlatform::IOS !== $signup->getPlatform(),
+            'android_apk_url' => self::ANDROID_APK_URL,
             'privacy_url' => $privacyUrl,
             // Registration activates at once only for this address (BetaSignupLinker::isInvited).
             'recipient_email' => $signup->getEmail(),

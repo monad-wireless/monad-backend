@@ -29,7 +29,8 @@ final class InvitationDraftTest extends TestCase
         self::assertSame('Pozvánka na testovanie MonadCount', $draft->getSubject());
         self::assertStringContainsString('Ahoj, Žofia & Ján,', $draft->getTextBody());
         self::assertStringNotContainsString('&amp;', $draft->getTextBody());
-        self::assertStringContainsString('pre iPhone', $draft->getTextBody());
+        self::assertStringContainsString('Inštalácia na iPhone (TestFlight)', $draft->getTextBody());
+        self::assertStringNotContainsString(InvitationDraft::ANDROID_APK_URL, $draft->getTextBody());
         self::assertStringContainsString('https://example.test/privacy', $draft->getTextBody());
         self::assertStringContainsString('Ľuboš', $draft->getTextBody());
         $wire = $draft->toString();
@@ -48,8 +49,17 @@ final class InvitationDraftTest extends TestCase
         $date = $signup->getInvitedAt();
         $draft = $this->drafts()->create($signup, $sender, 'https://example.test/privacy');
         self::assertStringContainsString('Ahoj,', $draft->getTextBody());
-        self::assertStringContainsString('pre Android', $draft->getTextBody());
+        self::assertStringContainsString(InvitationDraft::ANDROID_APK_URL, $draft->getTextBody());
+        self::assertStringNotContainsString('TestFlight', $draft->getTextBody());
         self::assertSame($date, $signup->getInvitedAt());
+    }
+
+    public function testUnsureSignupGetsBothInstallPaths(): void
+    {
+        $signup = new BetaSignup('tester@example.test', BetaPlatform::UNSURE, BetaAvailability::YES, 'test');
+        $draft = $this->drafts()->create($signup, (new User())->setEmail('operator@example.test'), 'https://example.test/privacy');
+        self::assertStringContainsString('Inštalácia na iPhone (TestFlight)', $draft->getTextBody());
+        self::assertStringContainsString(InvitationDraft::ANDROID_APK_URL, $draft->getTextBody());
     }
 
     public function testWithdrawnSignupCannotProduceARecipientMessage(): void
