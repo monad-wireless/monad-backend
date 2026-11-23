@@ -44,6 +44,7 @@ class ProfileController extends AbstractController
             properties: [
                 new OA\Property(property: 'points_total', type: 'number', example: 360),
                 new OA\Property(property: 'quests_completed', type: 'integer', example: 3),
+                new OA\Property(property: 'runs_total', type: 'integer', example: 5, description: 'Every run started, completed or not'),
                 new OA\Property(property: 'contribution', type: 'object'),
                 new OA\Property(property: 'history', type: 'array', items: new OA\Items(type: 'object')),
             ]

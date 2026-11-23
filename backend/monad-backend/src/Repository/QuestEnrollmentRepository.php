@@ -232,6 +232,7 @@ class QuestEnrollmentRepository extends ServiceEntityRepository
      * @return array{
      *   points_total: float,
      *   quests_completed: int,
+     *   runs_total: int,
      *   contribution: array{dwells: int, dwell_seconds: int, distinct_points: int, points_visited: list<string>},
      *   history: list<array{quest: string, completed_at: string|null, points: float|null}>,
      *   activity: list<array{date: string, dwells: int}>
@@ -327,9 +328,19 @@ class QuestEnrollmentRepository extends ServiceEntityRepository
             $cursor = $cursor->modify('+1 day');
         }
 
+        // Every run the participant started, whatever became of it, so the profile can show
+        // "12 of 15 runs completed". Additive: older app builds ignore the key.
+        $runsTotal = (int) $this->createQueryBuilder('e')
+            ->select('COUNT(e.id)')
+            ->andWhere('e.user = :user')
+            ->setParameter('user', $user)
+            ->getQuery()
+            ->getSingleScalarResult();
+
         return [
             'points_total' => $total,
             'quests_completed' => count($completed),
+            'runs_total' => $runsTotal,
             'contribution' => [
                 'dwells' => $dwells,
                 'dwell_seconds' => $dwellSeconds,
