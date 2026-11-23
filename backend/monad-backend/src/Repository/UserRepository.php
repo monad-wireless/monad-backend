@@ -32,4 +32,16 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
         $this->getEntityManager()->persist($user);
         $this->getEntityManager()->flush();
     }
+
+    /**
+     * Case-insensitive, the comparison BetaSignupRepository::findByEmail makes, so the people
+     * desk never pairs a signup with one account and creates a second for the same person.
+     */
+    public function findOneByEmailInsensitive(string $email): ?User
+    {
+        return $this->createQueryBuilder('u')
+            ->andWhere('LOWER(u.email) = :email')->setParameter('email', mb_strtolower(trim($email)))
+            ->setMaxResults(1)
+            ->getQuery()->getOneOrNullResult();
+    }
 }

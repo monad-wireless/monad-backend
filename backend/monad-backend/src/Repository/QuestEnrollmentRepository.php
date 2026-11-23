@@ -376,6 +376,41 @@ class QuestEnrollmentRepository extends ServiceEntityRepository
     }
 
     /**
+     * Runs per account for the people list: one grouped query, not one per row.
+     *
+     * `last_at` is the latest run start or server-stamped completion, the only per-person
+     * activity this database records (sign-ins are not recorded).
+     *
+     * @return array<string, array{runs: int, completed: int, open: int, points: float, last_at: \DateTimeImmutable|null}> keyed by RFC 4122 user id
+     */
+    public function summaryByUser(): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
+            "SELECT user_id::text AS user_id,
+                    COUNT(*) AS runs,
+                    COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+                    COUNT(*) FILTER (WHERE status = 'in_progress') AS open,
+                    COALESCE(SUM(points_awarded) FILTER (WHERE status = 'completed'), 0) AS points,
+                    GREATEST(MAX(created_at), MAX(completion_received_at)) AS last_at
+               FROM quest_enrollments
+              WHERE user_id IS NOT NULL
+           GROUP BY user_id"
+        );
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(string) $row['user_id']] = [
+                'runs' => (int) $row['runs'],
+                'completed' => (int) $row['completed'],
+                'open' => (int) $row['open'],
+                'points' => (float) $row['points'],
+                'last_at' => $row['last_at'] !== null ? new \DateTimeImmutable((string) $row['last_at']) : null,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * Newest enrollments with their relations loaded, for the overview and the participant page.
      *
      * @return list<QuestEnrollment>

@@ -380,6 +380,31 @@ class QuestEnrollment
     }
 
     /**
+     * An operator's state change from the admin (people desk, run page).
+     *
+     * Only the status moves. The server-stamped `completionReceivedAt` and the frozen points
+     * are evidence and stay as the app left them. Therefore `completed` is refused for a run
+     * whose completion the server never received: the cooldown query orders by that column,
+     * and PostgreSQL sorts a NULL first in DESC, so a hand-completed run would become "the last
+     * completion" with no instant. Every other move is allowed. `in_progress` blocks a new start
+     * at the same node until the stale reaper in QuestController abandons it.
+     *
+     * @throws \LogicException on a refused or empty change
+     */
+    public function changeStatusByOperator(QuestEnrollmentStatus $to): static
+    {
+        if ($to === $this->status) {
+            throw new \LogicException(sprintf('This run is already %s.', str_replace('_', ' ', $to->value)));
+        }
+        if ($to === QuestEnrollmentStatus::COMPLETED && $this->completionReceivedAt === null) {
+            throw new \LogicException('The server never received a completion for this run, so it cannot be marked completed by hand.');
+        }
+        $this->status = $to;
+
+        return $this;
+    }
+
+    /**
      * Take this run out of the study. Nothing it recorded changes; see QuarantineTrait.
      *
      * @throws \InvalidArgumentException on a blank reason

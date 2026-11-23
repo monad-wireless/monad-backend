@@ -3,9 +3,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\BetaSignup;
-use App\Entity\User;
 use App\Enum\BetaSignupStatus;
-use App\Join\InvitationDraft;
 use App\Repository\BetaSignupRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
@@ -18,83 +16,42 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Uid\Uuid;
 
 /**
- * The onboarding desk (IP-157, Phase 5): beta signups from /join, worked by hand.
+ * The signup row actions behind the people desk (IP-157 Phase 5, folded into /admin/people on
+ * 2026-11-23).
  *
- * `#[AdminRoute]` on a plain controller for the reason QuestBuilderController gives. Every
- * write is a POST with a session CSRF token and redirects back to the same filter, so the
- * browser's back button never re-posts. There is no mail transport by the researcher's call
- * (proposal Q4): an invitation downloads as .eml. "Mark invited" is a separate status change
- * after the operator sends the message in their mail client.
+ * The desk page itself is gone: signups are rows of the one people list, and "Create account"
+ * there (PeopleController) replaces the .eml-then-mark-invited routine. What stays here are the
+ * side exits and the notes, plus the CSV export. Every write is a POST with a session CSRF
+ * token and redirects back to the people list, so the back button never re-posts.
  */
 #[IsGranted('ROLE_SUPERADMIN')]
 final class OnboardingController extends AbstractController
 {
-    private const CSRF = 'onboarding';
-
-    /** The desk's default view: what still needs a decision. */
-    private const DEFAULT_STATUSES = [BetaSignupStatus::NEW, BetaSignupStatus::INVITED];
+    public const CSRF = 'onboarding';
 
     public function __construct(
         private readonly BetaSignupRepository $signups,
         private readonly EntityManagerInterface $em,
-        private readonly InvitationDraft $drafts,
-        private readonly string $apiBaseUrl,
     ) {
     }
 
+    /** The old desk address, kept so bookmarks land on the signups that still need an account. */
     #[AdminRoute(path: '/people/onboarding', name: 'people_onboarding')]
-    public function index(Request $request): Response
+    public function index(): RedirectResponse
     {
-        $statuses = $this->statusFilter($request);
-        $rows = [];
-        foreach ($this->signups->findByStatuses($statuses) as $signup) {
-            $rows[] = ['signup' => $signup];
-        }
-
-        return $this->render('admin/onboarding.html.twig', [
-            'counts' => $this->signups->countByStatus(),
-            'rows' => $rows,
-            'statuses' => array_map(static fn (BetaSignupStatus $s) => $s->value, $statuses),
-            'all_statuses' => array_map(static fn (BetaSignupStatus $s) => $s->value, BetaSignupStatus::cases()),
-            'filter' => self::filterParam($statuses),
-        ]);
+        return $this->redirectToRoute('admin_people', ['stage' => 'awaiting']);
     }
 
-    #[AdminRoute(path: '/people/onboarding/{id}/invitation.eml', name: 'people_onboarding_draft', options: ['methods' => ['GET']])]
-    public function draft(string $id): Response
-    {
-        $signup = Uuid::isValid($id) ? $this->signups->find(Uuid::fromString($id)) : null;
-        if (!$signup instanceof BetaSignup) {
-            throw $this->createNotFoundException('No beta signup with that id.');
-        }
-        $sender = $this->getUser();
-        if (!$sender instanceof User) {
-            throw $this->createAccessDeniedException();
-        }
-        if (!in_array($signup->getStatus(), [BetaSignupStatus::NEW, BetaSignupStatus::INVITED], true)) {
-            throw $this->createNotFoundException('This signup is no longer awaiting an invitation.');
-        }
-        $message = $this->drafts->create($signup, $sender, rtrim($this->apiBaseUrl, '/') . $this->generateUrl('privacy_policy'));
-
-        return new Response($message->toString(), Response::HTTP_OK, [
-            'Content-Type' => 'message/rfc822',
-            'Content-Disposition' => sprintf('attachment; filename="monadcount-invitation-%s.eml"', $signup->getId()),
-            'Cache-Control' => 'private, no-store',
-            'X-Content-Type-Options' => 'nosniff',
-        ]);
-    }
-
-    /** The current filter as text/csv: what a spreadsheet or a mail merge needs and nothing more. */
+    /** Every signup as text/csv: what a spreadsheet or a mail merge needs and nothing more. */
     #[AdminRoute(path: '/people/onboarding/export.csv', name: 'people_onboarding_export')]
-    public function export(Request $request): Response
+    public function export(): Response
     {
-        $statuses = $this->statusFilter($request);
         $handle = fopen('php://temp', 'r+');
         if ($handle === false) {
             throw new \RuntimeException('Could not open a temporary stream.');
         }
-        fputcsv($handle, ['email', 'name', 'platform', 'availability', 'updates_opt_in', 'status', 'created_at', 'invited_at'], escape: '\\');
-        foreach ($this->signups->findByStatuses($statuses, 10_000) as $s) {
+        fputcsv($handle, ['email', 'name', 'platform', 'availability', 'updates_opt_in', 'status', 'created_at', 'invited_at', 'registered_at'], escape: '\\');
+        foreach ($this->signups->findByStatuses([], 10_000) as $s) {
             fputcsv($handle, [
                 $s->getEmail(),
                 $s->getName() ?? '',
@@ -104,31 +61,17 @@ final class OnboardingController extends AbstractController
                 $s->getStatus()->value,
                 $s->getCreatedAt()->format(\DateTimeInterface::ATOM),
                 $s->getInvitedAt()?->format(\DateTimeInterface::ATOM) ?? '',
+                $s->getRegisteredAt()?->format(\DateTimeInterface::ATOM) ?? '',
             ], escape: '\\');
         }
         rewind($handle);
         $csv = (string) stream_get_contents($handle);
         fclose($handle);
 
-        $name = sprintf('beta-signups-%s-%s.csv', self::filterParam($statuses) ?: 'all', (new \DateTimeImmutable())->format('Ymd'));
-
         return new Response($csv, Response::HTTP_OK, [
             'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => sprintf('attachment; filename="%s"', str_replace(',', '+', $name)),
+            'Content-Disposition' => sprintf('attachment; filename="beta-signups-%s.csv"', (new \DateTimeImmutable())->format('Ymd')),
         ]);
-    }
-
-    #[AdminRoute(path: '/people/onboarding/{id}/invite', name: 'people_onboarding_invite', options: ['methods' => ['POST']])]
-    public function invite(string $id, Request $request): RedirectResponse
-    {
-        $signup = $this->guarded($id, $request);
-        $user = $this->getUser();
-        if (!$user instanceof User) {
-            throw $this->createAccessDeniedException();
-        }
-        $this->transition($signup, static fn (BetaSignup $s) => $s->markInvited($user), sprintf('%s marked invited.', $signup->getEmail()));
-
-        return $this->back($request);
     }
 
     #[AdminRoute(path: '/people/onboarding/{id}/decline', name: 'people_onboarding_decline', options: ['methods' => ['POST']])]
@@ -172,7 +115,7 @@ final class OnboardingController extends AbstractController
     private function guarded(string $id, Request $request): BetaSignup
     {
         if (!$this->isCsrfTokenValid(self::CSRF, $request->request->getString('_token'))) {
-            throw $this->createAccessDeniedException('Stale form: reload the desk and try again.');
+            throw $this->createAccessDeniedException('Stale form: reload the page and try again.');
         }
         $signup = Uuid::isValid($id) ? $this->signups->find(Uuid::fromString($id)) : null;
         if (!$signup instanceof BetaSignup) {
@@ -198,45 +141,15 @@ final class OnboardingController extends AbstractController
         $this->addFlash('success', $done);
     }
 
+    /** Back to the people list, or to the person page when the form came from one. */
     private function back(Request $request): RedirectResponse
     {
-        $filter = $request->request->getString('filter');
-
-        return $this->redirectToRoute('admin_people_onboarding', $filter === '' ? [] : ['status' => $filter]);
-    }
-
-    /**
-     * `?status=new,invited` (the default), `?status=all`, any comma list of statuses, or the
-     * checkbox form's `?s[]=new&s[]=invited`. Unknown names are dropped; a list that ends up
-     * empty means the default, not everything.
-     *
-     * @return list<BetaSignupStatus>
-     */
-    private function statusFilter(Request $request): array
-    {
-        $boxes = array_filter($request->query->all('s'), 'is_string');
-        $raw = $boxes !== [] ? implode(',', $boxes) : trim($request->query->getString('status'));
-        if ($raw === '') {
-            return self::DEFAULT_STATUSES;
+        $person = $request->request->getString('person');
+        if ($person !== '' && Uuid::isValid($person)) {
+            return $this->redirectToRoute('admin_participant', ['id' => $person]);
         }
-        if ($raw === 'all') {
-            return [];
-        }
-        $out = [];
-        foreach (explode(',', $raw) as $name) {
-            $case = BetaSignupStatus::tryFrom(trim($name));
-            if ($case !== null) {
-                $out[$case->value] = $case;
-            }
-        }
+        $stage = $request->request->getString('stage');
 
-        return $out === [] ? self::DEFAULT_STATUSES : array_values($out);
+        return $this->redirectToRoute('admin_people', $stage === '' ? [] : ['stage' => $stage]);
     }
-
-    /** @param list<BetaSignupStatus> $statuses */
-    private static function filterParam(array $statuses): string
-    {
-        return $statuses === [] ? 'all' : implode(',', array_map(static fn (BetaSignupStatus $s) => $s->value, $statuses));
-    }
-
 }

@@ -145,10 +145,10 @@ class DashboardController extends AbstractDashboardController
         $signups = $this->signups->countByStatus();
         $add(
             $items,
-            (int) ($signups['new'] ?? 0),
+            (int) ($signups['new'] ?? 0) + (int) ($signups['invited'] ?? 0),
             'warn',
-            'signups waiting on an invitation',
-            $this->generateUrl('admin_people_onboarding'),
+            'signups waiting for an account',
+            $this->generateUrl('admin_people', ['stage' => 'awaiting']),
         );
 
         // Streams landed, metadata.json never did: an upload that stopped half way.
@@ -314,38 +314,8 @@ class DashboardController extends AbstractDashboardController
         ]);
     }
 
-    /**
-     * One participant: runs, sessions, the phones they used, and what their walking produced.
-     *
-     * `{id}` is constrained to a UUID because /admin/people/onboarding and
-     * /admin/people/notifications (IP-157) sit under the same prefix and this route is
-     * registered first; without the requirement "onboarding" matched here as an id.
-     */
-    #[AdminRoute(path: '/people/{id}', name: 'participant', options: ['requirements' => ['id' => '[0-9a-fA-F-]{36}']])]
-    public function participant(string $id): Response
-    {
-        $user = Uuid::isValid($id) ? $this->entityManager->getRepository(User::class)->find(Uuid::fromString($id)) : null;
-        if (!$user instanceof User) {
-            throw new NotFoundHttpException('No user with that id.');
-        }
-
-        $enrollments = $this->enrollments->findRecent(200, $user);
-        $handsets = [];
-        foreach ($enrollments as $enrollment) {
-            $h = $enrollment->getHandset();
-            if ($h !== null) {
-                $handsets[$h->getId()->toRfc4122()] = $h;
-            }
-        }
-
-        return $this->render('admin/participant.html.twig', [
-            'participant' => $user,
-            'stats' => $this->enrollments->statsForUser($user),
-            'enrollments' => $enrollments,
-            'sessions' => $this->sessions->findForUser($user, 200),
-            'handsets' => array_values($handsets),
-        ]);
-    }
+    // The person page (`admin_participant`) moved to PeopleController on 2026-11-23, beside the
+    // one people list it is opened from.
 
     // ── Lab operations ───────────────────────────────────────────────────────────────────────
 
@@ -528,7 +498,7 @@ class DashboardController extends AbstractDashboardController
     public function configureMenuItems(): iterable
     {
         yield MenuItem::linkToDashboard('Today');
-        yield MenuItem::linkToRoute('Participants', '', 'admin_people');
+        yield MenuItem::linkToRoute('People', '', 'admin_people');
         yield MenuItem::linkToRoute('Quests', '', 'admin_lab_quests');
         yield MenuItem::linkToRoute('Runs', '', 'admin_runs');
         yield MenuItem::linkToRoute('Notifications', '', 'admin_people_notifications');

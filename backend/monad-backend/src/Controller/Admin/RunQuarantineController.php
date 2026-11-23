@@ -3,6 +3,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\QuestEnrollment;
+use App\Enum\QuestEnrollmentStatus;
 use App\Repository\LabSessionRepository;
 use App\Repository\QuestEnrollmentRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -49,6 +50,30 @@ final class RunQuarantineController extends AbstractController
     {
         $enrollment = $this->guardedEnrollment($id, $request);
         $this->apply(fn () => $enrollment->release(), 'Run released back into the study.');
+
+        return $this->redirectToRoute('admin_enrollment', ['id' => $id]);
+    }
+
+    /**
+     * The operator's run-state control (2026-11-23), from the run page and the person page.
+     * The entity owns which moves are allowed (QuestEnrollment::changeStatusByOperator).
+     * `return=person` goes back to the walker's page, anything else to the run page.
+     */
+    #[AdminRoute(path: '/runs/enrollments/{id}/status', name: 'enrollment_status', options: ['methods' => ['POST']])]
+    public function changeEnrollmentStatus(string $id, Request $request): RedirectResponse
+    {
+        $enrollment = $this->guardedEnrollment($id, $request);
+        $to = QuestEnrollmentStatus::tryFrom($request->request->getString('status'));
+        if ($to === null) {
+            $this->addFlash('warning', 'Unknown run state.');
+        } else {
+            $this->apply(fn () => $enrollment->changeStatusByOperator($to), sprintf('Run is now %s. Recorded steps, timestamps and points did not change.', str_replace('_', ' ', $to->value)));
+        }
+
+        $user = $enrollment->getUser();
+        if ($request->request->getString('return') === 'person' && $user !== null) {
+            return $this->redirectToRoute('admin_participant', ['id' => $user->getId()?->toRfc4122()]);
+        }
 
         return $this->redirectToRoute('admin_enrollment', ['id' => $id]);
     }

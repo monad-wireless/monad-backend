@@ -156,7 +156,8 @@ services:
             $apiBaseUrl: '%env(DEFAULT_URI)%'
             $publicSiteUrl: '%env(MONAD_PUBLIC_SITE_URL)%'
 
-    App\Controller\Admin\OnboardingController:
+    # The people desk writes the privacy-policy link into each invitation it prepares.
+    App\Controller\Admin\PeopleController:
         arguments:
             $apiBaseUrl: '%env(DEFAULT_URI)%'
 

@@ -2,54 +2,119 @@
 {% import 'admin/_ui.html.twig' as ui %}
 
 {#
-  PARTICIPANTS — the rail entry ahead of the lane that fills it (IP-157 Phase 10).
-  Honest, not empty: it says what is not here yet and links to the two surfaces that do the job.
+  PEOPLE — one list over accounts and beta signups (2026-11-23). A signup without an account
+  is a row with "Create account"; everything else opens the person page.
 #}
 
-{% block content_title %}Participants{% endblock %}
-{% block page_actions %}<a class="ui-btn ui-btn-primary" href="{{ path('admin_people_onboarding') }}">Onboarding desk</a>{% endblock %}
+{% block content_title %}People{% endblock %}
+{% block page_actions %}
+    <a class="ui-btn" href="{{ path('admin_people_onboarding_export') }}">Export signups CSV</a>
+    <a class="ui-btn" href="{{ users_url }}">Raw account register</a>
+{% endblock %}
 
 {% block main %}
-    {{ ui.strip([
-        {label: 'Accounts', value: accounts},
-        {label: 'Signups', value: signups_total},
-        {label: 'Waiting on a decision', value: signups_waiting, state: signups_waiting > 0 ? 'warn' : 'muted'},
-    ]) }}
+    {% set token = csrf_token('people') %}
+    {% set signup_token = csrf_token('onboarding') %}
+    {% set platforms = {ios: 'iPhone', android: 'Android', unsure: 'Not sure'} %}
+    <div class="onboarding people-desk">
+        <p class="ui-note"><strong>Create account</strong> makes an active account with a generated password and shows the invitation to send (TestFlight link, e-mail, password). The tester can change the password in the app.</p>
 
-    <p class="ui-note">Invite new testers from the onboarding desk, or open an account to review their activity and manage access.</p>
-
-    <div class="ui-section">
-        <h2>Recent accounts <span class="more"><a href="{{ users_url }}">Search and manage all accounts</a></span></h2>
-        {% if accounts > recent_accounts|length %}<p class="ui-note">Showing the latest {{ recent_accounts|length }} of {{ accounts }} accounts.</p>{% endif %}
-        {% set rows = [] %}
-        {% for person in recent_accounts %}
-            {% set rows = rows|merge([{href: path('admin_participant', {id: person.id}), cells: [
-                ui.identity(person.name, person.email, path('admin_participant', {id: person.id})),
-                person.status|state_word,
-                person.isSuperAdmin ? 'Operator' : 'Participant',
-                ui.clock(person.createdAt),
-            ]}]) %}
+        {% set tabs = [] %}
+        {% for key, label in stages %}
+            {% set tabs = tabs|merge([{label: label, href: path('admin_people', {stage: key}), count: counts[key]}]) %}
         {% endfor %}
-        {{ ui.table(rows, [{label: 'Participant', wrap: true}, {label: 'Status'}, {label: 'Access'}, {label: 'Joined'}], {datatable: true, label: 'accounts', empty: 'No accounts yet.'}) }}
-    </div>
+        {% set tabs = tabs|merge([{label: 'All', href: path('admin_people', {stage: 'all'}), count: total}]) %}
+        {{ ui.tabs(tabs, stage == 'all' ? 'All' : stages[stage]) }}
 
-    <div class="ui-section">
-        <h2>Manage participants</h2>
-        {{ ui.table([
-            {href: path('admin_people_onboarding'), cells: [
-                '<a href="' ~ path('admin_people_onboarding') ~ '">Onboarding desk</a>',
-                'Prepare invitations, follow up with testers and manage signup notes.',
-                signups_waiting > 0 ? '<span class="state state-warn">' ~ signups_waiting ~ ' waiting</span>' : ui.state('clear', 'muted'),
-            ]},
-            {href: users_url, cells: [
-                '<a href="' ~ users_url ~ '">Accounts</a>',
-                'Every account: name, e-mail, roles, status, password reset and anonymise.',
-                accounts,
-            ]},
-        ], [
-            {label: 'Page'},
-            {label: 'What it does', wrap: true},
-            {label: '', align: 'right'}
-        ]) }}
+        {{ ui.table_start([
+            {label: 'Person', wrap: true},
+            {label: 'Stage'},
+            {label: 'Platform'},
+            {label: 'Runs', align: 'right'},
+            {label: 'Points', align: 'right'},
+            {label: 'Last run activity'},
+            {label: 'Since'},
+            {label: 'Actions', wrap: true},
+        ], {datatable: true, label: 'people', class: 'onboarding-table'}) }}
+        {% for row in rows %}
+            {% set u = row.user %}
+            {% set s = row.signup %}
+            {% set person_href = u ? path('admin_participant', {id: u.id}) : null %}
+            <tr>
+                <td class="wrap">
+                    {% if u %}
+                        {{ ui.identity(u.name ?? (s ? s.name : null), u.email, person_href) }}
+                    {% elseif s.status.value == 'withdrawn' %}
+                        <span class="text-muted">Personal details removed</span>
+                    {% else %}
+                        {{ ui.identity(s.name, s.email) }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if u %}
+                        {% if u.deleted %}{{ ui.state('anonymised', 'muted') }}
+                        {% elseif row.stage == 'pending' %}{{ ui.state('waiting for approval', 'warn') }}
+                        {% elseif row.stage == 'closed' %}{{ ui.state(u.status.value, 'muted') }}
+                        {% else %}{{ ui.state(row.stage == 'operator' ? 'operator' : 'active', 'ok') }}{% endif %}
+                    {% else %}
+                        {{ ui.state(s.status.value == 'new' ? 'signed up' : s.status.value, row.stage == 'awaiting' ? 'warn' : 'muted') }}
+                    {% endif %}
+                </td>
+                <td>{{ s ? platforms[s.platform.value] : '—' }}</td>
+                <td class="num" data-order="{{ row.runs ? row.runs.runs : 0 }}">{% if row.runs %}{{ row.runs.completed }} / {{ row.runs.runs }}{% if row.runs.open > 0 %} <span class="state state-muted">{{ row.runs.open }} open</span>{% endif %}{% else %}—{% endif %}</td>
+                <td class="num" data-order="{{ row.runs ? row.runs.points : 0 }}">{{ row.runs ? row.runs.points|number_format(1) : '—' }}</td>
+                <td data-order="{{ row.last_at ? row.last_at.timestamp : 0 }}">{{ row.last_at ? ui.clock(row.last_at) : '—' }}</td>
+                <td data-order="{{ row.since.timestamp }}">{{ ui.clock(row.since) }}</td>
+                <td class="wrap">
+                    <div class="row-actions">
+                        {% if row.stage == 'awaiting' %}
+                            <form method="post" action="{{ path('admin_people_create_account', {id: s.id}) }}">
+                                <input type="hidden" name="_token" value="{{ token }}">
+                                <button type="submit" class="ui-btn ui-btn-primary">Create account</button>
+                            </form>
+                        {% elseif row.stage == 'pending' %}
+                            <form method="post" action="{{ path('admin_people_access', {id: u.id}) }}">
+                                <input type="hidden" name="_token" value="{{ token }}"><input type="hidden" name="status" value="active"><input type="hidden" name="stage" value="{{ stage }}">
+                                <button type="submit" class="ui-btn ui-btn-primary">Approve</button>
+                            </form>
+                        {% endif %}
+                        {% if person_href %}<a class="ui-btn" href="{{ person_href }}">Open</a>{% endif %}
+                    </div>
+                    {% if not u and s.status.value != 'withdrawn' %}
+                        <details class="row-details signup-more">
+                            <summary>{{ s.notes ? 'Notes & more' : 'Details & more' }}</summary>
+                            <dl>
+                                <dt>Availability</dt><dd>{{ {yes: 'Available', sometimes: 'Sometimes', remote: 'Remote only', no: 'Not available'}[s.availability.value] ?? s.availability.value }}</dd>
+                                <dt>Updates</dt><dd>{{ s.updatesOptIn ? 'Opted in' : 'Not subscribed' }}</dd>
+                                <dt>Source</dt><dd>{{ s.source ?? 'Not recorded' }}</dd>
+                                {% if s.invitedAt %}<dt>Invited</dt><dd>{{ s.invitedAt|clock }}{% if s.invitedBy %}<br>{{ s.invitedBy.email }}{% endif %}</dd>{% endif %}
+                            </dl>
+                            <form method="post" action="{{ path('admin_people_onboarding_notes', {id: s.id}) }}" class="signup-notes">
+                                <input type="hidden" name="_token" value="{{ signup_token }}"><input type="hidden" name="stage" value="{{ stage }}">
+                                <label for="notes-{{ s.id }}">Private operator note</label>
+                                <textarea id="notes-{{ s.id }}" name="notes" rows="3">{{ s.notes ?? '' }}</textarea>
+                                <button type="submit" class="ui-btn">Save note</button>
+                            </form>
+                            <div class="row-actions">
+                                {% if s.status.value in ['new', 'invited'] %}
+                                    <form method="post" action="{{ path('admin_people_onboarding_decline', {id: s.id}) }}" data-confirm="Decline this signup? No email will be sent.">
+                                        <input type="hidden" name="_token" value="{{ signup_token }}"><input type="hidden" name="stage" value="{{ stage }}"><button type="submit" class="ui-btn">Decline</button>
+                                    </form>
+                                {% endif %}
+                                {% if s.status.value in ['new', 'invited', 'declined'] %}
+                                    <form method="post" action="{{ path('admin_people_onboarding_withdraw', {id: s.id}) }}" data-confirm="Withdraw {{ s.email }}? Their email, name and notes will be permanently removed.">
+                                        <input type="hidden" name="_token" value="{{ signup_token }}"><input type="hidden" name="stage" value="{{ stage }}"><button type="submit" class="ui-btn ui-btn-danger">Withdraw</button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </details>
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="8" class="wrap"><span class="ui-empty">Nobody in this stage. Choose another tab above.</span></td></tr>
+        {% endfor %}
+        {{ ui.table_end() }}
+        <p class="ui-note">Runs are completed / started. "Last run activity" is the latest run start or received completion. Sign-ins are not recorded.</p>
     </div>
 {% endblock %}

@@ -59,7 +59,7 @@ class UserCrudController extends AbstractCrudController
             ->setEntityLabelInPlural('Users')
             ->setDefaultSort(['createdAt' => 'DESC'])
             ->setSearchFields(['email', 'name'])
-            ->setHelp('index', 'Roles: every account has ROLE_USER implicitly. ROLE_SUPERADMIN is what grants access to this interface. Approval: an app registration whose email was not invited from the onboarding desk is Pending and cannot sign in. Filter by Status = Pending, then set Active to approve.');
+            ->setHelp('index', 'The raw account register. For everyday work use People: create accounts from signups, approve, reset passwords and control runs there. Roles: every account has ROLE_USER implicitly. ROLE_SUPERADMIN grants access to this interface.');
     }
 
     public function configureFilters(Filters $filters): Filters
