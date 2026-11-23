@@ -400,6 +400,14 @@ class QuestEnrollment
             throw new \LogicException('The server never received a completion for this run, so it cannot be marked completed by hand.');
         }
         $this->status = $to;
+        // Every points total sums `points_awarded` over completed runs. A run completed by hand
+        // (typically a `failed` run whose one skipped step an operator accepts) used to keep a
+        // NULL award and so counted 0. It gets the quest's current value, stamped now; a run that
+        // already carries an award keeps it (`awardPoints()` is idempotent). Moving a run away
+        // from `completed` leaves the award in place: the totals filter on status.
+        if ($to === QuestEnrollmentStatus::COMPLETED && $this->quest !== null) {
+            $this->awardPoints($this->quest->getPoints());
+        }
 
         return $this;
     }
