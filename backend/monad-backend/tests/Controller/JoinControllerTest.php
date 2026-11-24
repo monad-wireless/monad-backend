@@ -104,8 +104,8 @@ class JoinControllerTest extends KernelTestCase
         $response = $this->post(self::valid());
 
         self::assertSame(200, $response->getStatusCode());
-        self::assertStringContainsString('Thanks, your interest is recorded.', (string) $response->getContent());
-        self::assertStringContainsString('nothing to install yet', (string) $response->getContent());
+        self::assertStringContainsString('Thanks, you are registered.', (string) $response->getContent());
+        self::assertStringContainsString('email with your sign-in address and a password', (string) $response->getContent());
 
         $rows = $this->rows();
         self::assertCount(1, $rows);
@@ -148,7 +148,7 @@ class JoinControllerTest extends KernelTestCase
         $response = $this->post(self::valid(['website' => 'http://spam.example']));
 
         self::assertSame(200, $response->getStatusCode());
-        self::assertStringContainsString('Thanks, your interest is recorded.', (string) $response->getContent());
+        self::assertStringContainsString('Thanks, you are registered.', (string) $response->getContent());
         self::assertSame([], $this->rows());
     }
 

@@ -10,9 +10,9 @@
 {% block body %}
     <h1>Want to help test the little boxes in the FIIT library?</h1>
 
-    <p>MonadCount investigates how Wi-Fi and Bluetooth measurements can help us understand how busy a room is. I’m preparing an invitation-only student beta of the companion app. App-store access is planned later.</p>
-    <p>Leave your email if you’d like an invitation when I can include you. You may be asked to try a short measurement task at FIIT and tell me how the app behaved. No experience with wireless sensing is needed. Bugs are welcome; they were probably coming anyway.</p>
-    <p>This page expresses interest. It does not reserve a place or enrol you in a research session. An invitation will explain the task, expected time and data recorded, so you can decide then.</p>
+    <p>MonadCount investigates how Wi-Fi and Bluetooth measurements can help us understand how busy a room is. The student beta of the companion app is open for Android and iPhone.</p>
+    <p>Register here and I will create your account and email you the sign-in address and a password. You can install the app from <a href="https://monad.dubec.dev/#beta">monad.dubec.dev</a> already; it waits at the sign-in screen until the email arrives. You may then try a short measurement task at FIIT and tell me how the app behaved. No experience with wireless sensing is needed. Bugs are welcome; they were probably coming anyway.</p>
+    <p>Registering does not enrol you in a research session. The app explains each task, the expected time and the data recorded before you start, so you can decide then.</p>
     <p class="muted sig">Jakub Dubec, FIIT STU Bratislava · <a href="mailto:jakub.dubec@stuba.sk">jakub.dubec@stuba.sk</a></p>
 
     {% if limited %}
@@ -30,8 +30,8 @@
 
         <div class="field{{ errors.email is defined ? ' bad' }}">
             <label for="email">Email address</label>
-            <span class="help">Use an address where you would like to receive your invitation.</span>
-            <input type="email" id="email" name="email" value="{{ values.email ?? '' }}" maxlength="180" autocomplete="email" required{% if errors.email is defined %} aria-invalid="true" aria-describedby="email-error"{% endif %}>
+            <span class="help">Please use your STU email (name@stuba.sk) if you have one. Another address works too. Your password and your sign-in name go to this address.</span>
+            <input type="email" id="email" name="email" value="{{ values.email ?? '' }}" maxlength="180" autocomplete="email" placeholder="name@stuba.sk" required{% if errors.email is defined %} aria-invalid="true" aria-describedby="email-error"{% endif %}>
             {% if errors.email is defined %}<p class="error" id="email-error">{{ errors.email }}</p>{% endif %}
         </div>
 
@@ -74,7 +74,7 @@
             <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
         </div>
 
-        <button type="submit" class="btn">Ask for an invitation</button>
+        <button type="submit" class="btn">Register for the beta</button>
     </form>
 
     <div class="note">
