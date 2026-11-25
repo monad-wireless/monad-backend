@@ -80,7 +80,7 @@ class JoinControllerTest extends KernelTestCase
 
         self::assertSame(200, $response->getStatusCode());
         $html = (string) $response->getContent();
-        self::assertStringContainsString('<title>Join the MonadCount beta</title>', $html);
+        self::assertStringContainsString('<title>Join MonadCount</title>', $html);
         self::assertStringContainsString('name="email"', $html);
         self::assertStringContainsString('name="consent"', $html);
         self::assertStringContainsString('name="website"', $html, 'the honeypot field is rendered');

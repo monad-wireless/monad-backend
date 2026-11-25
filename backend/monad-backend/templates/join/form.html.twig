@@ -10,8 +10,8 @@
 {% block body %}
     <h1>Want to help test the little boxes in the FIIT library?</h1>
 
-    <p>MonadCount investigates how Wi-Fi and Bluetooth measurements can help us understand how busy a room is. The student beta of the companion app is open for Android and iPhone.</p>
-    <p>Register here and I will create your account and email you the sign-in address and a password. You can install the app from <a href="https://monad.dubec.dev/#beta">monad.dubec.dev</a> already; it waits at the sign-in screen until the email arrives. You may then try a short measurement task at FIIT and tell me how the app behaved. No experience with wireless sensing is needed. Bugs are welcome; they were probably coming anyway.</p>
+    <p>MonadCount investigates how Wi-Fi and Bluetooth measurements can help us understand how busy a room is. The MonadCount app, for Android and iPhone, is how you take part.</p>
+    <p>Register here and I will create your account and email you the sign-in address and a password. You can install the app from <a href="https://monad.dubec.dev/#app">monad.dubec.dev</a> already; it waits at the sign-in screen until the email arrives. You may then try a short measurement task at FIIT and tell me how the app behaved. No experience with wireless sensing is needed. Bugs are welcome; they were probably coming anyway.</p>
     <p>Registering does not enrol you in a research session. The app explains each task, the expected time and the data recorded before you start, so you can decide then.</p>
     <p class="muted sig">Jakub Dubec, FIIT STU Bratislava · <a href="mailto:jakub.dubec@stuba.sk">jakub.dubec@stuba.sk</a></p>
 
@@ -59,7 +59,7 @@
         </fieldset>
 
         <div class="field">
-            <span class="q">Beta invitations</span>
+            <span class="q">Your consent</span>
             <label class="choice"><input type="checkbox" name="consent" value="1"{{ (values.consent ?? false) ? ' checked' }} required> <span>{{ consent_text }}</span></label>
             {% if errors.consent is defined %}<p class="error">{{ errors.consent }}</p>{% endif %}
         </div>
@@ -74,7 +74,7 @@
             <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
         </div>
 
-        <button type="submit" class="btn">Register for the beta</button>
+        <button type="submit" class="btn">Register</button>
     </form>
 
     <div class="note">
