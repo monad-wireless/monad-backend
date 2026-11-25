@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Lab\Contract\CountingContracts;
+use App\Quest\Live\LiveProtocol;
 use App\Quest\RecurrencePolicy;
 use App\Repository\QuestRepository;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -546,5 +547,24 @@ class Quest
     public function requiresRoomSweep(): bool
     {
         return in_array(CountingContracts::CAPABILITY_ROOM_SWEEP, $this->requiredCapabilities, true);
+    }
+
+    /**
+     * Software contracts a build either has or does not: the room sweep and the live step. Unlike
+     * a radio capability, silence about one means "this build predates it", so a quest that needs
+     * one is withheld from, and refused to, a handset that declares nothing. An older build would
+     * draw a live step as an instruction card and let the participant tap through the whole run.
+     */
+    private const STRICT_CAPABILITIES = [CountingContracts::CAPABILITY_ROOM_SWEEP, LiveProtocol::CAPABILITY];
+
+    public function requiresStrictContract(): bool
+    {
+        return array_intersect(self::STRICT_CAPABILITIES, $this->requiredCapabilities) !== [];
+    }
+
+    /** @param string[] $deviceCapabilities */
+    public function satisfiesStrictContracts(array $deviceCapabilities): bool
+    {
+        return array_diff(array_intersect(self::STRICT_CAPABILITIES, $this->requiredCapabilities), $deviceCapabilities) === [];
     }
 }

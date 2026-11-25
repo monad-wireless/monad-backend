@@ -6,6 +6,7 @@ use App\Entity\LabPlacement;
 use App\Entity\Quest;
 use App\Entity\QuestStep;
 use App\Enum\QuestStepType;
+use App\Quest\Live\LiveEngineSpecs;
 use Doctrine\ORM\EntityManagerInterface;
 use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\ErrorCorrectionLevel;
@@ -146,8 +147,13 @@ class MarkerService
             return $values;
         }
 
+        if ($step->getType() === QuestStepType::LIVE) {
+            // The engine says which printed codes its players may meet.
+            return LiveEngineSpecs::find($config['engine'] ?? null)?->scannedValues((array) ($config['options'] ?? [])) ?? [];
+        }
+
         if ($step->getType() !== QuestStepType::SCAN_QR) {
-            // Exactly two step types put a participant in front of a printed code. Everything else
+            // Only these step types put a participant in front of a printed code. Everything else
             // projects nothing, even if it happens to carry an `expected_value` key — otherwise a
             // stray config field grows a sheet entry no card corresponds to. `markers()` restricts
             // the query to the same two types, so this guard only matters to a direct caller; it
@@ -381,7 +387,7 @@ class MarkerService
     {
         return $this->entityManager->createQuery(
             'SELECT s, q FROM App\Entity\QuestStep s JOIN s.quest q WHERE s.type IN (:types) ORDER BY q.name, s.order'
-        )->setParameter('types', [QuestStepType::SCAN_QR, QuestStepType::PROBE])->getResult();
+        )->setParameter('types', [QuestStepType::SCAN_QR, QuestStepType::PROBE, QuestStepType::LIVE])->getResult();
     }
 
     // ── rendering ────────────────────────────────────────────────────────────────────────────

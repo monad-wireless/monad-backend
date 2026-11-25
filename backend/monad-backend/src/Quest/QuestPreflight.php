@@ -6,6 +6,7 @@ namespace App\Quest;
 
 use App\Enum\QuestStepType;
 use App\Lab\Contract\CountingContracts;
+use App\Quest\Live\LiveEngineSpecs;
 
 /**
  * The warnings an author sees before saving a quest (IP-157). Warnings never block a save;
@@ -113,6 +114,20 @@ final class QuestPreflight
                         );
                         break;
                     }
+                }
+            }
+
+            // A live step is a software contract too, and its engine adds what it needs of a phone.
+            if ($type === QuestStepType::LIVE) {
+                array_push($capabilities, ...LiveEngineSpecs::capabilitiesOf((array) $config));
+                $engine = LiveEngineSpecs::find($config['engine'] ?? null);
+                if ($engine?->needsBroadcast() === true && !$this->declaresBroadcast($steps)) {
+                    $warnings[] = sprintf(
+                        'Step %d runs the %s engine, which needs the phone on air, but the start step does not '
+                        . 'declare features.broadcast: no sensor will hear the player.',
+                        $i,
+                        $engine->key(),
+                    );
                 }
             }
 

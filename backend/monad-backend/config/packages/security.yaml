@@ -128,6 +128,9 @@ security:
         # /api/lab/fleet/<anything> route does not inherit a public hole it was
         # never reviewed for.
         - { path: ^/api/lab/fleet/history$, roles: PUBLIC_ACCESS }
+        # The nodes' live sightings. A node has no account, so the controller checks its own bearer
+        # token (MONAD_LIVE_INGEST_TOKEN, empty = the endpoint is off). Anchored like its neighbours.
+        - { path: ^/api/lab/live/sightings$, roles: PUBLIC_ACCESS }
         - { path: ^/api/admin, roles: ROLE_SUPERADMIN }
         # IP-157 — the per-user notification surface (`/api/me/notifications*`,
         # `/api/me/push-token`, `/api/me/notification-preferences`) needs no line of its own:

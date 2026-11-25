@@ -31,6 +31,8 @@ API for the MonadCount mobile instrument. Symfony 7.3 (PHP 8.3) + PostgreSQL.
 | `POST /api/lab/sessions/{recordingSessionId}/evidence/seal` | IP-162. Body: a `monad-lab/evidence-manifest/v1`. The server reads every listed artefact back from the bucket, hashes it and compares; answers `pending` (an artefact is not up yet), `verified` (sealed, one accepted seal per recording), `invalid` (422: structure, ownership or a hash disagreed) or `conflict` (409: a different manifest is already sealed). Identical retries return the same receipt. Owner or superadmin. `App\Lab\Evidence\EvidenceSealService`; the bucket is behind the `ArtefactReader` port so the rules are tested against a real Postgres with a fake store. **The app never calls this route** (found 2026-10-20). The upload path seals instead: when `metadata.json` (or a late `evidence-manifest.json`) lands on a complete recording, `App\Lab\Evidence\UploadedManifestSealer` reads the uploaded manifest back and seals it as the uploader. A seal failure there is logged, never fails the upload. `app:lab-evidence:seal-uploaded [--dry-run]` backfills complete recordings that have a manifest and no seal attempt. |
 | `GET /api/lab/sessions/{recordingSessionId}/references` | IP-162. Every seal attempt with its disposition and every sweep receipt (`lab_reference_receipts`, one per `(recording, sweep)`) with its reconciliation status. No radio estimate, no model output. `app:lab-evidence:reconcile` is the bounded operator retry for rows left `pending`; the MCP read is `lab_session_references`. |
 | `/api/auth/*`, `/api/quest*` | Accounts and the quest schedule engine. `POST /api/quest/{id}/start` takes an optional `{"handset": {…}}` body (IP-149): the phone's description of itself, validated against a **closed key set** (`App\Quest\HandsetDescriptor`, 400 `VALIDATION_108`/`_109` on anything present and wrong) and frozen VERBATIM on the enrollment (`handset_snapshot`) beside the `handsets` row it finds-or-creates by the app's own installation UUID. An empty body is an app build that predates the descriptor and stays valid. IP-162: start now also gates on capabilities (descriptor `capabilities` ∪ `?capabilities=` query, 409 `capability_missing`); a quest carrying a room-sweep Counting step (`observe.room_sweep.v1`, derived from an observe step whose config names `monad-quest/observe/v2`) is withheld from the listing AND refused at start when the handset declares nothing, because "nothing" is a build that would render the step as five partial views. `POST /api/quest/{id}/complete` validates a sweep step's `step_data` as a `monad-lab/sweep-summary/v1` against the frozen snapshot (422 on disagreement), writes a `lab_reference_receipts` row, and returns the same 200 for an identical replay of an accepted completion instead of a 409. |
+| `POST /api/quest/live/{stepCompletionId}` | One sync of a **live step** (protocol `monad-live/v1`): the phone posts events, the server answers with the screen to draw. See "Live steps" below. |
+| `POST /api/lab/live/sightings` | A node's `ble-live` reader posts `{node, rows: [[service uuid, unix ms, dBm]]}` with `X-Monad-Live-Token` (`MONAD_LIVE_INGEST_TOKEN`; empty = 503, the feature is off). Only a UUID that an active live run named as its own is stored, in the UNLOGGED `live_sightings`. |
 | `GET /api/lab/fleet` | The fleet's public vital signs for `monad.dubec.dev` — per-node readings and fleet-wide scalars, from a closed PromQL allow-list (`App\Fleet\FleetMetricsReader`). Exists so the website, a host process, never needs a route into the observability stack: Mimir publishes no host port, this container is on the same `monad` network and reaches `mimir:9009` by container DNS. Unauthenticated (the site holds no JWT) and **404'd on the public vhost** — the site calls it over loopback. It kept that treatment when `/admin` was published on 2026-09-18, because an unauthenticated raw-metrics projection and a login page are different exposures. `reachable: false` is a first-class answer and must not be rendered as zeros. |
 
 `MONAD_METRICS_URL` (`http://mimir:9009/prometheus`) is read by two things, because it is one
@@ -51,6 +53,29 @@ new row by decision, and no platform device identifier (`identifierForVendor`, `
 accepted or stored. `handsets.last_descriptor` is a read model for the inventory page; the evidence
 for a given run is the per-run `handset_snapshot`, never normalised. Both columns are written once
 at start and rendered read-only, for the reason ground-truth scans are.
+
+## Live steps (`App\Quest\Live`)
+
+A `live` quest step has no script. Its config names an engine and its options (`{engine, options}`),
+the server holds the state, and the phone draws the widgets it is sent (`LiveView`: text, meter,
+stats, scan, number, choice, hold, button, progress). A new mechanic made of these widgets is one
+server class and no app release. A new widget needs a new capability token.
+
+- **Adding a mechanic:** implement `LiveEngine` (`open`, `handle`, `advance`, `view`, `isDone`,
+  `result`) and a `LiveEngineSpec` (option checks, capabilities, scanned values). Both are found by
+  their service tags. `Questions` is the smallest example, `RadioHunt` the full one.
+- **One run per step completion** (`quest_live_runs`, state as jsonb, row-locked per sync). Every
+  event and every `$context->log()` line goes to `quest_live_events`, which is append-only and is the
+  server's half of the evidence. A resent event id is handled once and acknowledged again.
+- **`TargetAllocator`** gives players of one pool different resources through `quest_live_leases`;
+  a lease expires by itself when a phone goes away.
+- **Guidance** lives in `Guidance/`: `RadioModel` is a port of `lab_atlas.trilaterate` (same
+  constants, pinned by `tests/fixtures/live/radio-model.json`), arms `position`, `pattern`, `none`.
+  Every hint that was shown is logged with the estimate behind it.
+- **Capability `quest.live.v1` is strict**, as `observe.room_sweep.v1` is: withheld from the listing
+  and refused at start when the handset declares nothing, because an older build draws the step as
+  an instruction card.
+- Quests without a live step do not touch any of this.
 
 ## The recording-session register (IP-149)
 

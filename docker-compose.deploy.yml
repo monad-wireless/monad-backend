@@ -70,6 +70,8 @@ services:
       # JSON; empty selects the null push adapter (inbox only). The PushSender checks is_file()
       # on it, because the directory below is mounted whether or not the file exists.
       MONAD_FCM_CREDENTIALS: ${MONAD_FCM_CREDENTIALS:-}
+      # Live quests: the nodes' ingest secret. Unset = the ingest endpoint answers 503.
+      MONAD_LIVE_INGEST_TOKEN: ${MONAD_LIVE_INGEST_TOKEN:-}
       # Days after invitation before app:beta:purge removes a signup that never registered.
       MONAD_BETA_RETENTION_DAYS: ${MONAD_BETA_RETENTION_DAYS:-90}
       # /join renders its links against the public site, not this API's hostname.

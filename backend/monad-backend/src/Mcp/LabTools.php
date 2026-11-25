@@ -9,6 +9,7 @@ use App\Entity\QuestStep;
 use App\Entity\User;
 use App\Enum\QuestStepType;
 use App\Lab\Contract\CountingContracts;
+use App\Quest\Live\LiveEngineSpecs;
 use App\Quest\QuestRevisionWriter;
 use App\Repository\LabPlacementRepository;
 use App\Service\GroundTruthService;
@@ -205,7 +206,16 @@ class LabTools
         description: <<<'TXT'
             Create or replace a quest by name. Steps are [{order, name, type, config}]; types are
             start, wait, scan_qr, connect_to_ap, walk_to, find_ble_device, sensor_capture,
-            ble_advertise, probe, finish.
+            ble_advertise, probe, observe, live, finish.
+
+            A live step is driven by the server: config.engine names the engine and config.options
+            configures it. `radio_hunt` needs options.floor and options.targets (the probe target
+            shape) and features.broadcast on the start step; optional rounds, guidance
+            ({"position": 1, "pattern": 1, "none": 1} draws one arm per treasure by weight),
+            dwell_seconds, zone_radius_m, min_separation_m, skip_after_seconds, crew_question,
+            count_question (null asks nothing), pool. `questions` needs options.questions, a list
+            of {id, prompt, kind: number|choice, ...}. The quest requires quest.live.v1
+            automatically, so an app build without live steps is never offered it.
 
             Prefer `monad-knowledge lab quest-build` over hand-authoring a probe quest. It reads the
             surveyed placements out of PostGIS and writes the targets, so a card that moves costs a
@@ -345,6 +355,8 @@ class LabTools
         /** @var list<QuestStep> $built */
         $built = [];
         $violations = [];
+        /** @var array<int, string> $liveNeedsBroadcast step number to engine key */
+        $liveNeedsBroadcast = [];
 
         foreach ($steps as $i => $data) {
             $type = QuestStepType::tryFrom($data['type'] ?? '');
@@ -405,6 +417,15 @@ class LabTools
                 $trackDeclared = ($features['track'] ?? false) === true;
             }
 
+            // Same derivation and the same sentence as QuestPreflight, by design.
+            if ($type === QuestStepType::LIVE) {
+                array_push($requiredCapabilities, ...LiveEngineSpecs::capabilitiesOf((array) $config));
+                $liveEngine = LiveEngineSpecs::find($config['engine'] ?? null);
+                if ($liveEngine?->needsBroadcast() === true) {
+                    $liveNeedsBroadcast[$i] = $liveEngine->key();
+                }
+            }
+
             // IP-162: a room-sweep Counting step is a software contract an older build would
             // misread as five partial views. Same derivation as QuestPreflight, by design.
             if ($type === QuestStepType::OBSERVE && CountingContracts::isSweepConfig((array) $config)) {
@@ -437,6 +458,17 @@ class LabTools
                 . 'features.broadcast. Every feature defaults to false, so the identity frame will '
                 . 'never go on air and each dwell records a participant standing still while no '
                 . 'receiver can hear them. Add {"features": {"broadcast": true}} to the start step.';
+        }
+
+        if (!$broadcastDeclared) {
+            foreach ($liveNeedsBroadcast as $i => $engineKey) {
+                $warnings[] = sprintf(
+                    'Step %d runs the %s engine, which needs the phone on air, but the start step does not '
+                    . 'declare features.broadcast: no sensor will hear the player.',
+                    $i,
+                    $engineKey,
+                );
+            }
         }
 
         // A session-scoped broadcast needs the peripheral role exactly as a `ble_advertise` step

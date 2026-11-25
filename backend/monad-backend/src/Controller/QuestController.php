@@ -18,7 +18,6 @@ use App\Entity\QuestStepSkipRecord;
 use App\Entity\User;
 use App\Enum\QuestEnrollmentStatus;
 use App\Enum\QuestStepCompletionStatus;
-use App\Lab\Contract\CountingContracts;
 use App\Lab\Evidence\SweepReceiptService;
 use App\Quest\HandsetDescriptor;
 use App\Quest\HandsetRegistry;
@@ -144,13 +143,13 @@ class QuestController extends AbstractController
                     static fn ($quest) => $quest->isSupportedBy($deviceCapabilities)
                 ));
             }
-            // IP-162: the room-sweep contract is withheld even from a client that declares
+            // IP-162: a software contract (room sweep, live step) is withheld even from a client that declares
             // nothing. "Nothing declared" is a build that predates capability reporting, and
             // such a build would render a sweep step as five partial views. Every other
             // capability keeps the old rule above, so legacy quests stay offered to legacy clients.
             $quests = array_values(array_filter(
                 $quests,
-                static fn ($quest) => !$quest->requiresRoomSweep() || in_array(CountingContracts::CAPABILITY_ROOM_SWEEP, $deviceCapabilities, true)
+                static fn ($quest) => $quest->satisfiesStrictContracts($deviceCapabilities)
             ));
 
             // Transform entities to DTOs
@@ -203,7 +202,7 @@ class QuestController extends AbstractController
                         properties: [
                             new OA\Property(property: 'id', type: 'string', format: 'uuid', example: '70000a54-e220-4b17-95c3-ebdfa164caf9', description: 'Step unique identifier'),
                             new OA\Property(property: 'name', type: 'string', example: 'Scan QR Code at Library', description: 'Step name'),
-                            new OA\Property(property: 'type', type: 'string', enum: ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'sensor_capture', 'ble_advertise', 'probe', 'observe', 'finish'], example: 'scan_qr', description: 'Step type'),
+                            new OA\Property(property: 'type', type: 'string', enum: ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'sensor_capture', 'ble_advertise', 'probe', 'observe', 'live', 'finish'], example: 'scan_qr', description: 'Step type'),
                             new OA\Property(property: 'order', type: 'integer', example: 1, description: 'Step order in quest sequence'),
                             new OA\Property(property: 'config', type: 'object', example: ['qr_code_id' => 'abc123'], description: 'Step-specific configuration')
                         ],
@@ -329,7 +328,7 @@ class QuestController extends AbstractController
                                     new OA\Property(property: 'step_id', type: 'string', format: 'uuid'),
                                     new OA\Property(property: 'step_completion_id', type: 'string', format: 'uuid'),
                                     new OA\Property(property: 'name', type: 'string'),
-                                    new OA\Property(property: 'type', type: 'string', enum: ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'sensor_capture', 'ble_advertise', 'probe', 'observe', 'finish']),
+                                    new OA\Property(property: 'type', type: 'string', enum: ['start', 'wait', 'scan_qr', 'connect_to_ap', 'walk_to', 'find_ble_device', 'sensor_capture', 'ble_advertise', 'probe', 'observe', 'live', 'finish']),
                                     new OA\Property(property: 'order', type: 'integer'),
                                     new OA\Property(property: 'config', type: 'object')
                                 ],
@@ -435,7 +434,7 @@ class QuestController extends AbstractController
         // legacy quests startable by legacy clients exactly as before.
         $declaredCapabilities = self::declaredCapabilities($request, $handsetDescriptor);
         $missing = $quest->missingCapabilities($declaredCapabilities);
-        $refuse = $quest->requiresRoomSweep()
+        $refuse = $quest->requiresStrictContract()
             ? $missing !== []
             : ($declaredCapabilities !== [] && $missing !== []);
         if ($refuse) {

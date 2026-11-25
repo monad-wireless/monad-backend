@@ -353,7 +353,8 @@ class AuthController extends AbstractController
             properties: [
                 new OA\Property(property: 'email', type: 'string', format: 'email', example: 'user@example.com', description: 'User email address'),
                 new OA\Property(property: 'name', type: 'string', example: 'John Doe', nullable: true, description: 'User full name'),
-                new OA\Property(property: 'is_operator', type: 'boolean', example: false, description: 'May this account reach the operator surfaces (lab console, operator takes)? True for ROLE_SUPERADMIN.')
+                new OA\Property(property: 'is_operator', type: 'boolean', example: false, description: 'May this account reach the operator surfaces (lab console, operator takes)? True for ROLE_SUPERADMIN.'),
+                new OA\Property(property: 'participant_code', type: 'string', example: 'p-0123456789abcdef', description: 'The pseudonym this account has in every recording. Stable across phones and sign-ins.')
             ]
         )
     )]
@@ -392,6 +393,9 @@ class AuthController extends AbstractController
             // gated server-side on its own; this field only stops the app drawing doors that
             // would be refused.
             'is_operator' => $this->isGranted('ROLE_SUPERADMIN'),
+            // Until app 1.2.0+22 the phone named itself by its own login counter ("1", "7"), so two
+            // people could share an id and one person got a new one at each sign-in.
+            'participant_code' => $user->getParticipantCode(),
         ]);
     }
 }

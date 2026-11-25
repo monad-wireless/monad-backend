@@ -33,6 +33,7 @@ final class StepSchemaRegistry
             new BleAdvertiseSchema(),
             new ProbeSchema(),
             new ObserveSchema(),
+            new LiveSchema(),
             new FinishSchema(),
         ] as $schema) {
             $this->schemas[$schema->type()->value] = $schema;

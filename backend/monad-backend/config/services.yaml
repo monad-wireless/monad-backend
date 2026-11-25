@@ -27,6 +27,9 @@ parameters:
     # IP-157 — the Firebase service account path; empty selects the null push adapter. Declared
     # for the same reason as the three above: an UNSET variable must read as '' and not null.
     env(MONAD_FCM_CREDENTIALS): ''
+    # Live quests — the shared secret of the nodes that stream lab-phone sightings. Empty turns
+    # the ingest off (503); it never means "open".
+    env(MONAD_LIVE_INGEST_TOKEN): ''
 
 services:
     # default configuration for services in *this* file

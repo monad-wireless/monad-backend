@@ -85,6 +85,19 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->id;
     }
 
+    /**
+     * The name this person has in every recording: the same on each phone and after each sign-in.
+     *
+     * Derived, never stored, and one-way: the account id is a random UUID, so the code leads back
+     * to an account only for somebody who holds the account table. Not the id itself, because a
+     * ground-truth scan must not carry a key into `users`. Never change the derivation: the code is
+     * part of the storage path of every recording.
+     */
+    public function getParticipantCode(): string
+    {
+        return 'p-' . substr(hash('sha256', 'monad-participant/v1:' . $this->id->toRfc4122()), 0, 16);
+    }
+
     public function getEmail(): ?string
     {
         return $this->email;

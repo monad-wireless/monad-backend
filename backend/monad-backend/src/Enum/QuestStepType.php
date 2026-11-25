@@ -49,5 +49,12 @@ enum QuestStepType: string
      */
     case OBSERVE = 'observe';
 
+    /**
+     * The server drives the screen (2026-11-25). The phone sends what happened and draws the view
+     * it gets back, so one step type carries every interactive mechanic: the engine is named in
+     * the config ({@see \App\Quest\Live\LiveEngineSpecs}), and a new one needs no app release.
+     */
+    case LIVE = 'live';
+
     case FINISH = 'finish';
 }

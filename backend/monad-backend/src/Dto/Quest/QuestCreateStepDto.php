@@ -18,6 +18,7 @@ class QuestCreateStepDto
         'ble_advertise',
         'probe',
         'observe',
+        'live',
         'finish'
     ];
 
@@ -28,7 +29,7 @@ class QuestCreateStepDto
     #[Assert\NotBlank(message: 'Step type is required')]
     #[Assert\Choice(
         choices: self::VALID_STEP_TYPES,
-        message: 'Invalid step type. Allowed types: start, wait, scan_qr, connect_to_ap, walk_to, find_ble_device, sensor_capture, ble_advertise, probe, observe, finish'
+        message: 'Invalid step type. Allowed types: start, wait, scan_qr, connect_to_ap, walk_to, find_ble_device, sensor_capture, ble_advertise, probe, observe, live, finish'
     )]
     public ?string $type = null;
 

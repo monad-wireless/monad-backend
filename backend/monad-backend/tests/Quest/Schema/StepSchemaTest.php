@@ -89,6 +89,7 @@ class StepSchemaTest extends TestCase
             'ble_advertise' => ['duration_seconds'],
             'probe' => ['dwell_seconds', 'targets'],
             'observe' => ['prompt', 'min_readings'],
+            'live' => ['engine'],
             'finish' => [],
         ], $required);
     }
