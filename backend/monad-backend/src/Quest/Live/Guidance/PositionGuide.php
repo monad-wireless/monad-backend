@@ -13,8 +13,14 @@ namespace App\Quest\Live\Guidance;
 final class PositionGuide implements Guide
 {
     private const FAR_METRES = 14.0;
-    /** Once in, a player must clearly leave before the zone is taken away again. */
-    private const LEAVE_MARGIN = 1.5;
+    /**
+     * Once in, a player must clearly leave before the zone is taken away again.
+     *
+     * 0.5 m since 2026-11-26 (was 1.5 m): on the first Radio hunt day the screen said "in zone" at 10 of
+     * 22 wrong scans whose card was 4.1-7.3 m from the target, because the margin adds to the position
+     * error (study notebooks/studies/2026-11-26-radio-hunt-first in monad-knowledge).
+     */
+    private const LEAVE_MARGIN = 0.5;
 
     public function __construct(private readonly float $zoneRadius = 4.0)
     {

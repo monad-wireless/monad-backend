@@ -63,7 +63,10 @@ final class RadioModelTest extends TestCase
 
         self::assertTrue($guide->hint($this->model, $observations, [$x + 3.0, $y], [], false)->inZone);
         self::assertFalse($guide->hint($this->model, $observations, [$x + 5.0, $y], [], false)->inZone);
-        self::assertTrue($guide->hint($this->model, $observations, [$x + 5.0, $y], [], true)->inZone);
+        // Leave margin 0.5 m: a player already in keeps the zone up to 4.5 m and loses it beyond.
+        self::assertFalse($guide->hint($this->model, $observations, [$x + 4.3, $y], [], false)->inZone);
+        self::assertTrue($guide->hint($this->model, $observations, [$x + 4.3, $y], [], true)->inZone);
+        self::assertFalse($guide->hint($this->model, $observations, [$x + 5.0, $y], [], true)->inZone);
         self::assertGreaterThan(
             $guide->hint($this->model, $observations, [$x + 10.0, $y], [], false)->closeness,
             $guide->hint($this->model, $observations, [$x + 2.0, $y], [], false)->closeness,
