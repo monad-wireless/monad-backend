@@ -1,0 +1,62 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% import 'admin/_macros.html.twig' as m %}
+
+{% block content_title %}Handset {{ handset.displayName }}{% endblock %}
+
+{% block main %}
+    <div class="strip">
+        <span><span class="k">Installation</span><code>{{ handset.installationId }}</code></span>
+        <span><span class="k">Platform</span>{{ handset.platform }}</span>
+        <span><span class="k">Machine</span><code>{{ handset.machine ?? '—' }}</code></span>
+        <span><span class="k">Runs</span>{{ handset.enrollmentCount }}</span>
+        <span><span class="k">First seen</span>{{ handset.firstSeenAt|clock }}</span>
+        <span><span class="k">Last seen</span>{{ handset.lastSeenAt|clock }}</span>
+        <span><a href="{{ ea_url().setController('App\\Controller\\Admin\\HandsetCrudController').setAction('edit').setEntityId(handset.id) }}">edit label</a></span>
+    </div>
+
+    <p class="text-muted small">
+        A handset is one app installation. A reinstall is a new row, so the same phone can appear more than once;
+        the table at the bottom groups every installation by machine. The blocks below are the LATEST descriptor
+        this installation sent — the evidence for a given run is the snapshot on that run's enrollment.
+    </p>
+
+    <div class="row">
+        {% for block in blocks %}
+            <div class="col-lg-6">
+                <div class="card mb-3">
+                    <div class="card-header">latest · {{ block.name }}</div>
+                    <div class="table-responsive">{{ m.facts(block.rows) }}</div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Runs on this installation</div>
+        <div class="table-responsive">{{ m.enrollment_rows(enrollments) }}</div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Recording sessions from this installation</div>
+        <div class="table-responsive">{{ m.session_rows(sessions) }}</div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Installations by machine (whole inventory)</div>
+        <div class="table-responsive">
+            <table class="table table-sm table-dense mb-0">
+                <thead><tr><th>Platform</th><th>Machine</th><th class="num">Installations</th><th class="num">Runs</th></tr></thead>
+                <tbody>
+                    {% for row in by_machine %}
+                        <tr class="{{ row.machine == handset.machine and row.platform == handset.platform ? 'fw-semibold' : '' }}">
+                            <td>{{ row.platform }}</td>
+                            <td><code>{{ row.machine ?? '—' }}</code></td>
+                            <td class="num">{{ row.installations }}</td>
+                            <td class="num">{{ row.enrollments }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

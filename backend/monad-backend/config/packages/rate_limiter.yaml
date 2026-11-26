@@ -1,0 +1,24 @@
+# IP-157 — POST /join. Five attempts per client IP per sliding hour; the sixth renders the form
+# with one calm sentence and HTTP 429. Keyed on the client IP the trusted proxy forwarded
+# (framework.yaml trusted_proxies), so every phone behind the site's nginx is not one client.
+# No lock factory: symfony/lock is not installed and a single-container deployment needs none.
+framework:
+    rate_limiter:
+        join:
+            policy: sliding_window
+            limit: 5
+            interval: '1 hour'
+
+# The default storage is the app cache pool, which in the test env is the filesystem under
+# var/cache/test and would carry counts from one test run into the next. In memory, the counts
+# live exactly as long as the kernel the test booted.
+when@test:
+    framework:
+        rate_limiter:
+            join:
+                policy: sliding_window
+                limit: 5
+                interval: '1 hour'
+                storage_service: 'Symfony\Component\RateLimiter\Storage\InMemoryStorage'
+    services:
+        Symfony\Component\RateLimiter\Storage\InMemoryStorage: ~

@@ -1,0 +1,35 @@
+{#
+  Quarantine card for one run (Version20261023120000). Variables:
+    subject          — a QuestEnrollment or a LabSession
+    quarantine_path  — POST target that quarantines it
+    release_path     — POST target that releases it
+    noun             — 'run' or 'recording'
+    inherited        — optional: the enrollment behind a recording, when IT is quarantined
+  A quarantine changes nothing recorded; readers such as lab_runs leave the run out.
+#}
+<div class="card mb-3">
+    <div class="card-header">Study membership</div>
+    <div class="card-body">
+        {% if subject.quarantined %}
+            <p class="mb-2"><span class="state state-bad">quarantined</span> {{ subject.quarantinedAt|clock }}</p>
+            <p class="mb-2"><span class="text-muted">Reason:</span> {{ subject.quarantineReason }}</p>
+            <form method="post" action="{{ release_path }}" class="d-inline">
+                <input type="hidden" name="_token" value="{{ csrf_token('run-quarantine') }}">
+                <button type="submit" class="btn btn-sm btn-secondary">Release back into the study</button>
+            </form>
+        {% else %}
+            {% if inherited is defined and inherited and inherited.quarantined %}
+                <p class="mb-2"><span class="state state-bad">out of the study</span> through its enrollment, quarantined {{ inherited.quarantinedAt|clock }}: {{ inherited.quarantineReason }}</p>
+            {% else %}
+                <p class="mb-2"><span class="state state-ok">in the study</span></p>
+            {% endif %}
+            <form method="post" action="{{ quarantine_path }}" class="d-flex gap-2 align-items-start">
+                <input type="hidden" name="_token" value="{{ csrf_token('run-quarantine') }}">
+                <input type="text" name="reason" class="form-control form-control-sm" required maxlength="500"
+                       placeholder="Why this {{ noun }} leaves the study (e.g. App Store review account)">
+                <button type="submit" class="btn btn-sm btn-danger text-nowrap">Quarantine</button>
+            </form>
+            <p class="text-muted small mb-0 mt-2">Nothing this {{ noun }} recorded is changed or deleted. Readers such as <code>lab_runs</code> leave it out.</p>
+        {% endif %}
+    </div>
+</div>

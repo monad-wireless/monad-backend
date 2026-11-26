@@ -3,15 +3,21 @@
 namespace App\DataFixtures;
 
 use App\Entity\Quest;
+use App\Entity\QuestRevision;
 use App\Entity\QuestStep;
 use App\Entity\User;
 use App\Enum\QuestStepType;
+use App\Quest\QuestRevisionWriter;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Common\DataFixtures\DependentFixtureInterface;
 use Doctrine\Persistence\ObjectManager;
 
 class QuestFixtures extends Fixture implements DependentFixtureInterface
 {
+    public function __construct(private readonly QuestRevisionWriter $revisions)
+    {
+    }
+
     public function load(ObjectManager $manager): void
     {
         /** @var User $superadmin */
@@ -20,10 +26,12 @@ class QuestFixtures extends Fixture implements DependentFixtureInterface
         // Quest 1: MONAD1-MONAD6 (numbered beacons)
         $quest1 = $this->createFiitTreasureHuntNumbered($superadmin);
         $manager->persist($quest1);
+        $this->revisions->recordCurrent($quest1, $superadmin, QuestRevision::SOURCE_FIXTURE);
 
         // Quest 2: MONAD only (single device name)
         $quest2 = $this->createFiitTreasureHuntSingleName($superadmin);
         $manager->persist($quest2);
+        $this->revisions->recordCurrent($quest2, $superadmin, QuestRevision::SOURCE_FIXTURE);
 
         $manager->flush();
     }
@@ -39,8 +47,8 @@ class QuestFixtures extends Fixture implements DependentFixtureInterface
             "Use your phone's Bluetooth to detect each beacon and complete this exciting indoor adventure!\n\n" .
             "Good luck, explorer!"
         );
-        $quest->setAvailableFrom(new \DateTime('2025-01-01 00:00:00'));
-        $quest->setAvailableTo(new \DateTime('2025-12-31 23:59:59'));
+        $quest->setAvailableFrom(new \DateTime('-1 day'));
+        $quest->setAvailableTo(new \DateTime('+2 years'));
         $quest->setPoints(150.0);
         $quest->setEstimatedDuration(45);
         $quest->setCreatedBy($createdBy);
@@ -153,8 +161,8 @@ class QuestFixtures extends Fixture implements DependentFixtureInterface
             "Use your phone's Bluetooth to detect the beacon at each location!\n\n" .
             "Good luck, explorer!"
         );
-        $quest->setAvailableFrom(new \DateTime('2025-01-01 00:00:00'));
-        $quest->setAvailableTo(new \DateTime('2025-12-31 23:59:59'));
+        $quest->setAvailableFrom(new \DateTime('-1 day'));
+        $quest->setAvailableTo(new \DateTime('+2 years'));
         $quest->setPoints(150.0);
         $quest->setEstimatedDuration(45);
         $quest->setCreatedBy($createdBy);

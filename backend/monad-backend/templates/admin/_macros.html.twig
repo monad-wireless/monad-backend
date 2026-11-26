@@ -1,0 +1,194 @@
+{# The admin's shared pieces (IP-149). Tables, never cards; states as words, never coloured pills. #}
+
+{#- A two-column fact table from a flat map. Values are printed as given; nested values arrive pre-serialised. -#}
+{% macro facts(rows) %}
+    {% if rows is empty %}
+        <p class="text-muted small mb-0">Nothing reported.</p>
+    {% else %}
+        <table class="table table-sm table-dense table-facts mb-0">
+            <tbody>
+                {% for key, value in rows %}
+                    <tr>
+                        <th class="wrap">{{ key }}</th>
+                        <td class="wrap"><code>{{ value }}</code></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+{% endmacro %}
+
+{#- Enrollment status as a word. -#}
+{% macro state(status) %}
+    {%- set map = {in_progress: 'state-muted', completed: 'state-ok', failed: 'state-bad', abandoned: 'state-warn', skipped: 'state-warn'} -%}
+    <span class="state {{ map[status.value] ?? 'state-muted' }}">{{ status.value|replace({'_': ' '}) }}</span>
+{% endmacro %}
+
+{#- Horizontal bars, inline SVG, no library. items = [{label, value}], widths relative to the max. -#}
+{% macro bars(items, unit = '') %}
+    {% set max = 0 %}
+    {% for item in items %}{% if item.value > max %}{% set max = item.value %}{% endif %}{% endfor %}
+    {% set row_h = 16 %}
+    {% set label_w = 110 %}
+    {% set value_w = 48 %}
+    {% set width = 560 %}
+    {% set bar_w = width - label_w - value_w - 8 %}
+    {% set height = (items|length) * row_h + 4 %}
+    {% if items is empty %}
+        <p class="text-muted small mb-0">No data.</p>
+    {% else %}
+        <svg class="bars" viewBox="0 0 {{ width }} {{ height }}" width="{{ width }}" height="{{ height }}" role="img" aria-label="bar chart">
+            <line x1="{{ label_w }}" y1="0" x2="{{ label_w }}" y2="{{ height }}"></line>
+            {% for item in items %}
+                {% set y = loop.index0 * row_h + 2 %}
+                {% set w = max > 0 ? (item.value / max * bar_w)|round(1) : 0 %}
+                <text x="{{ label_w - 6 }}" y="{{ y + 11 }}" text-anchor="end">{{ item.label }}</text>
+                <rect x="{{ label_w + 2 }}" y="{{ y + 2 }}" width="{{ w }}" height="{{ row_h - 5 }}" class="{{ item.value == 0 ? 'muted' : '' }}"></rect>
+                <text x="{{ label_w + 6 + w }}" y="{{ y + 11 }}">{{ item.value }}{{ unit }}</text>
+            {% endfor %}
+        </svg>
+    {% endif %}
+{% endmacro %}
+
+{#-
+  The walk figures for one session, or the sentence that says why there are none.
+  `fig` = {urls: {view: url}, info_url, reason, floor}. The images are fetched by the operator's
+  browser from monad-knowledge web through signed URLs; this page never touches them server-side.
+-#}
+{% macro figures(fig, session_id) %}
+    {% if fig.reason is not null %}
+        <p class="text-muted small mb-0">{{ fig.reason }}</p>
+    {% else %}
+        {% set captions = {
+            overview: 'Overview: track, quality share, speed and pitch on one sheet.',
+            trajectory: 'Plan view in the session frame: track coloured by tracking quality, jumps dashed, waypoints and dwells named.',
+            quality: 'Per-sample tracking quality over time. Degraded windows are droppable because the column is per sample.',
+            speed: 'Inferred walking speed with the physical prior; steps above it are rejected, not smoothed.',
+            site: 'LiDAR mesh registered to floor ' ~ (fig.floor ?? '') ~ '. The residual in the subtitle is the error of the claim.',
+        } %}
+        <div class="figures">
+            {% for view, url in fig.urls %}
+                <figure class="figure mb-0">
+                    <img class="walk-figure" src="{{ url }}" alt="{{ view }} figure for session {{ session_id }}" loading="lazy"
+                         onerror="this.replaceWith(Object.assign(document.createElement('p'), {className: 'missing', textContent: 'Figure not returned by monad-knowledge web (signature, expiry, or a missing artefact). Reload the page for a fresh signature.'}))">
+                    <figcaption class="caption"><strong>{{ view }}</strong> — {{ captions[view] ?? '' }}</figcaption>
+                </figure>
+            {% endfor %}
+        </div>
+        {% if fig.info_url is not null %}
+            <div class="mt-3" data-walk-info="{{ fig.info_url }}">
+                <p class="text-muted small mb-1">Reduction numbers (from monad-knowledge web, <code>info.json</code>): <span class="js-status">loading…</span></p>
+                <div class="js-table"></div>
+            </div>
+        {% endif %}
+    {% endif %}
+{% endmacro %}
+
+{#- Rows of enrollments for any list page. Columns fixed so every list reads the same. -#}
+{% macro enrollment_rows(enrollments, show_user = true) %}
+    {% import _self as m %}
+    <table class="table table-sm table-dense mb-0">
+        <thead>
+            <tr>
+                <th>Started</th>
+                {% if show_user %}<th>Participant</th>{% endif %}
+                <th>Quest</th>
+                <th>Node</th>
+                <th>Handset</th>
+                <th>State</th>
+                <th class="num">Points</th>
+                <th>Completed</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in enrollments %}
+                <tr>
+                    <td><a href="{{ path('admin_enrollment', {id: e.id}) }}">{{ e.createdAt|clock }}</a></td>
+                    {% if show_user %}
+                        <td>{% if e.user %}<a href="{{ path('admin_participant', {id: e.user.id}) }}">{{ e.user.email ?? e.user.id|short_id }}</a>{% else %}—{% endif %}</td>
+                    {% endif %}
+                    <td>{{ e.quest ? e.quest.name : '—' }}</td>
+                    <td><code>{{ e.device ? e.device.slug : '—' }}</code></td>
+                    <td>{% if e.handset %}<a href="{{ path('admin_handset', {id: e.handset.id}) }}">{{ e.handset.displayName }}</a>{% else %}<span class="text-muted">not reported</span>{% endif %}</td>
+                    <td>{{ m.state(e.status) }}</td>
+                    <td class="num">{{ e.pointsAwarded is null ? '—' : e.pointsAwarded|number_format(1) }}</td>
+                    <td>{{ e.completionReceivedAt|clock }}</td>
+                </tr>
+            {% else %}
+                <tr><td colspan="{{ show_user ? 8 : 7 }}" class="text-muted">None.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endmacro %}
+
+{#- Rows of recording sessions for any list page. -#}
+{% macro session_rows(sessions, show_participant = true) %}
+    <table class="table table-sm table-dense mb-0">
+        <thead>
+            <tr>
+                <th>Uploaded</th>
+                <th>Session</th>
+                {% if show_participant %}<th>Participant</th>{% endif %}
+                <th>Quest</th>
+                <th>Roles</th>
+                <th>Phone</th>
+                <th>Build</th>
+                <th class="num">Files</th>
+                <th class="num">Bytes</th>
+                <th>Duration</th>
+                <th>State</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in sessions %}
+                <tr>
+                    <td><a href="{{ path('admin_recording_session', {id: s.id}) }}">{{ s.firstArtefactAt|clock }}</a></td>
+                    <td><code>{{ s.shortId }}</code></td>
+                    {% if show_participant %}<td><code>{{ s.participantId|short_id }}</code></td>{% endif %}
+                    <td>{{ s.quest ? s.quest.name : '—' }}</td>
+                    <td>{{ s.roles|join(' ') ?: '—' }}</td>
+                    <td>{{ (s.platform ~ ' ' ~ s.machine)|trim ?: '—' }}</td>
+                    <td><code>{{ s.buildId ?? '—' }}</code></td>
+                    <td class="num">{{ s.artefactCount }}</td>
+                    <td class="num">{{ s.artefactBytes|bytes }}</td>
+                    <td>{{ s.durationSeconds|duration }}</td>
+                    <td>
+                        {% if s.complete %}<span class="state state-ok">complete</span>{% else %}<span class="state state-warn">no sidecar</span>{% endif %}
+                        {% if s.interruptedReason %}<span class="state state-bad">interrupted</span>{% endif %}
+                    </td>
+                </tr>
+            {% else %}
+                <tr><td colspan="{{ show_participant ? 11 : 10 }}" class="text-muted">None.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endmacro %}
+
+{#- The one script the admin carries: fill reduction-number tables from signed info.json URLs. -#}
+{% macro walk_info_script() %}
+    <script>
+    document.querySelectorAll('[data-walk-info]').forEach(function (box) {
+        var status = box.querySelector('.js-status'), out = box.querySelector('.js-table');
+        fetch(box.getAttribute('data-walk-info'), {credentials: 'omit'}).then(function (r) {
+            if (!r.ok) { throw new Error('HTTP ' + r.status); }
+            return r.json();
+        }).then(function (info) {
+            status.textContent = '';
+            var table = document.createElement('table');
+            table.className = 'table table-sm table-dense table-facts mb-0';
+            Object.keys(info).forEach(function (key) {
+                var v = info[key];
+                var tr = document.createElement('tr');
+                var th = document.createElement('th'); th.textContent = key; th.className = 'wrap';
+                var td = document.createElement('td'); td.className = 'wrap';
+                var code = document.createElement('code');
+                code.textContent = (v !== null && typeof v === 'object') ? JSON.stringify(v) : String(v);
+                td.appendChild(code); tr.appendChild(th); tr.appendChild(td); table.appendChild(tr);
+            });
+            out.appendChild(table);
+        }).catch(function (err) {
+            status.textContent = 'not available (' + err.message + '). The figures above still render independently.';
+        });
+    });
+    </script>
+{% endmacro %}

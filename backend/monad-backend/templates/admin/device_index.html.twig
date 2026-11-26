@@ -1,0 +1,16 @@
+{#
+  The device register is the Lab section's "Devices" tab, so it carries the section's tab bar
+  like the other four pages. It is an EasyAdmin CRUD index rather than a bespoke page, so the
+  bar is prepended to the vendor's `main` block instead of being written into a template of
+  our own: everything else about the index — search, sort, pagination, filters — stays theirs.
+
+  Wired by `DeviceCrudController::configureCrud()->overrideTemplate('crud/index', …)`.
+#}
+{% extends '@EasyAdmin/crud/index.html.twig' %}
+
+{% block breadcrumb %}<a href="{{ path('admin_lab') }}">Lab</a> / Devices{% endblock %}
+
+{% block main %}
+    {{ include('admin/_lab_tabs.html.twig', {active: 'Devices'}) }}
+    {{ parent() }}
+{% endblock %}

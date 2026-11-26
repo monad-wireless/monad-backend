@@ -1,0 +1,44 @@
+Vendored webfonts for the management interface (IP-157, Phase 8)
+===============================================================
+
+These files are served by this application from `public/fonts/` and are never
+fetched from a third-party host. The admin may be published on a public vhost,
+and a font request to Google Fonts would tell that host every operator's IP
+address and page load. The files are copies of the subsets already vendored by
+the public site (`monad_knowledge/web/static/dist/assets/`, from the
+`@fontsource-variable/ibm-plex-sans`, `@fontsource/ibm-plex-mono` and
+`@fontsource-variable/literata` packages); only the latin and latin-ext subsets
+are copied, which is what this interface's copy uses.
+
+Both families are licensed under the SIL Open Font License, Version 1.1.
+
+  IBM Plex Sans, IBM Plex Mono
+    Copyright © 2017 IBM Corp. with Reserved Font Name "Plex".
+    https://github.com/IBM/plex
+
+  Literata
+    Copyright © 2017 The Literata Project Authors
+    (https://github.com/googlefonts/literata), with Reserved Font Name
+    "Literata".
+    https://github.com/googlefonts/literata
+
+The full licence text is at https://openfontlicense.org (SIL OFL 1.1). The two
+terms that bind this copy: the fonts may be redistributed and embedded, and
+they may not be sold on their own; any derivative must not use the Reserved
+Font Names. Serving them alongside this application is the permitted use, and
+nothing here modifies the font files.
+
+Files
+-----
+
+  ibm-plex-sans-latin-wght-normal.woff2      variable weight 100–700, latin
+  ibm-plex-sans-latin-ext-wght-normal.woff2  variable weight 100–700, latin-ext
+  ibm-plex-mono-latin-400-normal.woff2       regular, latin
+  ibm-plex-mono-latin-ext-400-normal.woff2   regular, latin-ext
+  ibm-plex-mono-latin-500-normal.woff2       medium, latin
+  ibm-plex-mono-latin-ext-500-normal.woff2   medium, latin-ext
+  literata-latin-wght-normal.woff2           variable weight 200–900, latin
+  literata-latin-ext-wght-normal.woff2       variable weight 200–900, latin-ext
+
+Literata carries the wordmark only, as on the public site. It is not a reading
+face here.

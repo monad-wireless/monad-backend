@@ -1,0 +1,172 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{# The placement board (IP-157 Phase 3). One table, verdicts as words, three hues. #}
+
+{% block breadcrumb %}<a href="{{ path('admin_lab') }}">Lab</a> / Markers{% endblock %}
+
+{% block content_title %}Placement board{% endblock %}
+
+{% block main %}
+    {{ include('admin/_lab_tabs.html.twig', {active: 'Markers'}) }}
+
+    <p class="text-muted small">
+        Every marker card and fleet node the mirror knows for this floor, where PostGIS says it stands, and whether
+        a live quest names it. <strong>matched</strong>: named by a live quest and present. <strong>spare</strong>: present,
+        named by nobody — normal, the fingerprint pool outlives any one arm. <strong>mismatch</strong>: named by a live
+        quest and absent from the mirror — a participant will look for a card that is not there. The mirror is
+        replaced by <code>lab_placements_write</code> from <code>{{ export_command }}</code>; nothing here moves a card.
+    </p>
+
+    <div class="strip">
+        <span><span class="k">Floor</span><code>{{ floor }}</code></span>
+        <span><span class="k">Cards</span>{{ counts.cards }}</span>
+        <span><span class="k">Nodes</span>{{ counts.nodes }}</span>
+        <span class="sync-hint"><span class="k">Sync</span>
+            {% if synced_at is null %}
+                <span class="state state-warn">never synced</span> — run <code>{{ export_command }}</code> then <code>lab_placements_write</code>
+            {% else %}
+                synced {{ synced_at|ago }} <span class="text-muted">({{ synced_at|clock }})</span>
+            {% endif %}
+        </span>
+        <span><span class="k">Matched</span>{{ counts.matched }}</span>
+        <span><span class="k">Spare</span>{{ counts.spare }}</span>
+        <span><span class="k">Mismatch</span>
+            {% if counts.mismatch > 0 %}<span class="state state-bad">{{ counts.mismatch }}</span>{% else %}<span class="state state-ok">0</span>{% endif %}
+        </span>
+        {% if counts.without_room > 0 %}
+            <span><span class="k">No room</span><span class="state state-warn">{{ counts.without_room }}</span></span>
+        {% endif %}
+    </div>
+
+    <div class="placements-toolbar">
+        {% if floors|length > 1 %}
+            <form method="get" action="{{ path('admin_lab_placements') }}">
+                <label for="placements-floor" class="text-muted small">Floor</label>
+                <select id="placements-floor" name="floor" onchange="this.form.submit()">
+                    {% for f in floors %}
+                        <option value="{{ f }}" {{ f == floor ? 'selected' : '' }}>{{ f }}</option>
+                    {% endfor %}
+                </select>
+                <noscript><button type="submit" class="btn btn-secondary btn-sm">Go</button></noscript>
+            </form>
+        {% endif %}
+        <a class="btn btn-secondary btn-sm" href="{{ path('admin_lab_placements_print', {floor: floor}) }}">Print sheet</a>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Mirror — {{ floor }}</div>
+        <div class="table-responsive">
+            <table class="table table-sm table-dense placements-table mb-0" id="placements-table" data-datatable data-table-label="markers">
+                <thead>
+                    <tr>
+                        <th>Key</th>
+                        <th>Kind</th>
+                        <th>Room</th>
+                        <th class="num">x (m)</th>
+                        <th class="num">y (m)</th>
+                        <th class="num">z (cm)</th>
+                        <th>Provenance</th>
+                        <th>Source updated</th>
+                        <th>Verdict</th>
+                        <th>Named by (live)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        {% set p = row.placement %}
+                        <tr data-row class="verdict-{{ row.verdict }}">
+                            <td><code>{{ p.key }}</code></td>
+                            <td>{{ p.kind }}</td>
+                            <td>{% if p.room is null %}<span class="no-room">— no room</span>{% else %}{{ p.room }}{% endif %}</td>
+                            <td class="coord">{{ p.xM|number_format(3) }}</td>
+                            <td class="coord">{{ p.yM|number_format(3) }}</td>
+                            <td class="coord">{{ p.zCm is null ? '—' : p.zCm|number_format(0) }}</td>
+                            <td>{{ p.provenance ?? '—' }}</td>
+                            <td>{{ p.sourceUpdatedAt|clock }}</td>
+                            <td><span class="state {{ row.verdict == 'matched' ? 'state-ok' : 'state-muted' }}">{{ row.verdict }}</span></td>
+                            <td class="wrap quests">
+                                {% for q in row.quests %}
+                                    {% if q.url %}<a href="{{ q.url }}">{{ q.name }}</a>{% else %}<span>{{ q.name }}</span>{% endif %}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endfor %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="10" class="text-muted">Nothing mirrored for <code>{{ floor }}</code>. Run <code>{{ export_command }}</code> and pass the output to <code>lab_placements_write</code>.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Named by live quests but not in the mirror</div>
+        <div class="table-responsive">
+            <table class="table table-sm table-dense placements-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Folded key</th>
+                        <th>Named as</th>
+                        <th>Verdict</th>
+                        <th>Quests</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in mismatch %}
+                        <tr class="verdict-mismatch">
+                            <td><code>{{ m.key }}</code></td>
+                            <td class="wrap">{% for v in m.values %}<code>{{ v }}</code>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+                            <td><span class="state state-bad">mismatch</span></td>
+                            <td class="wrap quests">
+                                {% for q in m.quests_linked %}
+                                    {% if q.url %}<a href="{{ q.url }}">{{ q.name }}</a>{% else %}<span>{{ q.name }}</span>{% endif %}
+                                {% endfor %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="4" class="text-muted">None. Every value a live quest names folds to a mirrored placement.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card mb-3" data-collapsed>
+        <div class="card-header">
+            Historical
+            <span class="text-muted" style="text-transform: none; font-weight: 400;">— named only by hidden or scheduled quests ({{ counts.historical }})</span>
+            <button type="button" class="placements-section-toggle float-end" data-toggle
+                    data-label-closed="show" data-label-open="hide" aria-expanded="false">show</button>
+        </div>
+        <div class="table-responsive" data-body>
+            <table class="table table-sm table-dense placements-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Folded key</th>
+                        <th>Named as</th>
+                        <th>In mirror</th>
+                        <th>Quests</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for h in historical %}
+                        <tr>
+                            <td><code>{{ h.key }}</code></td>
+                            <td class="wrap">{% for v in h.values %}<code>{{ v }}</code>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+                            <td>{% if h.in_mirror %}<span class="state state-ok">yes</span>{% else %}<span class="state state-muted">no</span>{% endif %}</td>
+                            <td class="wrap quests">
+                                {% for q in h.quests_linked %}
+                                    {% if q.url %}<a href="{{ q.url }}">{{ q.name }}</a>{% else %}<span>{{ q.name }}</span>{% endif %}
+                                    <span class="text-muted small">({{ q.status }})</span>
+                                {% endfor %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="4" class="text-muted">None.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

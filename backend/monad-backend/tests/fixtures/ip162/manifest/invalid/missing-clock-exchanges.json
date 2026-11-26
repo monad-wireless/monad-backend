@@ -1,0 +1,28 @@
+{
+  "description": "Schema-valid, but a sweep manifest that omits clock-exchanges.tsv cannot satisfy the new-recording eligibility gate. Schema validation passes; the required-artefact check must report the missing name.",
+  "schema_valid": true,
+  "expect_missing_artifacts": ["clock-exchanges.tsv"],
+  "manifest": {
+    "schema": "monad-lab/evidence-manifest/v1",
+    "recording_session_id": "0f000000-0000-4000-8000-00000000000a",
+    "enrollment_id": "0e000000-0000-4000-8000-00000000000b",
+    "quest_id": "0d000000-0000-4000-8000-00000000000d",
+    "step_completion_id": "0c000000-0000-4000-8000-00000000000c",
+    "sweep_ids": ["5e000000-0000-4000-8000-000000000001"],
+    "app_build_id": "fixture-build-1",
+    "payload_schemas": ["monad-app/headcount-marker/v3"],
+    "snapshot_sha256": "b33e25d256344f01b2991c38afda5dc1592ba801a6cb6e17fac120f3ebc1e24a",
+    "clock_domain": {
+      "boot_id": "fixture-boot-1",
+      "clock_source": "http-reference",
+      "monotonic_continuous": true
+    },
+    "artifacts": [
+      {"name": "markers.tsv", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "bytes": 0, "content_type": "text/tab-separated-values"},
+      {"name": "clock.tsv", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "bytes": 0, "content_type": "text/tab-separated-values"},
+      {"name": "metadata.json", "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", "bytes": 2, "content_type": "application/json"}
+    ],
+    "sealed_mono_ns": "260000000000",
+    "sealed_wall_ms": 1758441760000
+  }
+}

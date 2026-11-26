@@ -1,0 +1,186 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% import 'admin/_ui.html.twig' as ui %}
+{% import 'admin/_macros.html.twig' as m %}
+
+{#
+  ONE PERSON (2026-11-23): access, results, quests, runs with their state controls, activity,
+  recordings and phones. Opened from the People list; the raw account form is one link away.
+#}
+
+{% block content_title %}{{ participant.name ?? participant.email ?? participant.id|short_id }}{% endblock %}
+{% block breadcrumb %}<a href="{{ path('admin_people') }}">People</a>{% endblock %}
+{% block page_actions %}
+    {% set token = csrf_token('people') %}
+    {% if not participant.deleted %}
+        {% if participant.status.value == 'pending' %}
+            <form method="post" action="{{ path('admin_people_access', {id: participant.id}) }}" class="ui-inline">
+                <input type="hidden" name="_token" value="{{ token }}"><input type="hidden" name="status" value="active">
+                <button type="submit" class="ui-btn ui-btn-primary">Approve</button>
+            </form>
+        {% endif %}
+        {% if participant.id != app.user.id %}
+            <form method="post" action="{{ path('admin_people_reset_password', {id: participant.id}) }}" class="ui-inline" onsubmit="return confirm('Set a new password? The current one stops working and the new one is shown once, with a fresh invitation.')">
+                <input type="hidden" name="_token" value="{{ token }}">
+                <button type="submit" class="ui-btn">New password + invitation</button>
+            </form>
+        {% endif %}
+        <a class="ui-btn" href="{{ edit_url }}">Edit account</a>
+    {% endif %}
+{% endblock %}
+
+{% block main %}
+    {% set token = csrf_token('people') %}
+    {% set run_token = csrf_token('run-quarantine') %}
+    {% set signup_token = csrf_token('onboarding') %}
+
+    {{ ui.strip([
+        {label: 'E-mail', value: participant.email ? participant.email|e : 'removed'},
+        {label: 'Access', value: participant.deleted ? 'anonymised' : participant.status.value, state: participant.status.value == 'active' ? 'ok' : (participant.status.value == 'pending' ? 'warn' : 'muted')},
+        {label: 'Role', value: participant.superAdmin ? 'operator' : 'participant'},
+        {label: 'Cohort', value: participant.cohort ?? '—'},
+        {label: 'Platform', value: signup ? {ios: 'iPhone', android: 'Android', unsure: 'Not sure'}[signup.platform.value] : '—'},
+        {label: 'Account created', value: participant.createdAt|clock},
+    ]) }}
+
+    <nav class="ui-tabs person-sections" aria-label="Sections">
+        <a href="#results">Results</a>
+        <a href="#quests">Quests <span class="n">{{ quests|length }}</span></a>
+        <a href="#runs">Runs <span class="n">{{ enrollments|length }}</span></a>
+        <a href="#activity">Activity</a>
+        <a href="#recordings">Recordings <span class="n">{{ sessions|length }}</span></a>
+        <a href="#phones">Phones <span class="n">{{ handsets|length }}</span></a>
+        <a href="#access">Access</a>
+    </nav>
+
+    <div class="ui-section" id="results">
+        <h2>Results</h2>
+        {{ ui.kv([
+            {label: 'Points (frozen awards, completed runs)', value: stats.points_total|number_format(1)},
+            {label: 'Runs completed', value: stats.quests_completed},
+            {label: 'Dwells (completed steps)', value: stats.contribution.dwells},
+            {label: 'Dwell time', value: stats.contribution.dwell_seconds|duration},
+            {label: 'Distinct points visited', value: stats.contribution.distinct_points},
+            {label: 'Points visited', value: stats.contribution.points_visited is empty ? null : '<code>' ~ stats.contribution.points_visited|join(' ')|e ~ '</code>'},
+        ]) }}
+        {% set days = stats.activity|filter(d => d.dwells > 0) %}
+        {% if days is not empty %}
+            <h3 class="ui-subhead">Dwells per day, last six weeks (days with none left out)</h3>
+            {{ m.bars(days|map(d => {label: d.date, value: d.dwells})) }}
+        {% endif %}
+    </div>
+
+    <div class="ui-section" id="quests">
+        <h2>Quests</h2>
+        {% set rows = [] %}
+        {% for q in quests %}
+            {% set rows = rows|merge([{href: q.quest_id ? path('admin_quest_analytics', {id: q.quest_id}) : null, cells: [
+                q.name|e, q.runs, q.completed, q.open, q.ended, q.points|number_format(1), ui.clock(q.last),
+            ]}]) %}
+        {% endfor %}
+        {{ ui.table(rows, [{label: 'Quest', wrap: true}, {label: 'Runs', align: 'right'}, {label: 'Completed', align: 'right'}, {label: 'Open', align: 'right'}, {label: 'Failed or abandoned', align: 'right'}, {label: 'Points', align: 'right'}, {label: 'Last started'}], {empty: 'No runs yet. A quest appears here when this person starts it in the app.'}) }}
+    </div>
+
+    <div class="ui-section" id="runs">
+        <h2>Runs</h2>
+        <p class="ui-note">Change a state here or on the run page. Only the state moves: recorded steps, timestamps and points stay as the app sent them. A run can be marked completed only when the server received its completion. To take a run out of the study, open it and quarantine it.</p>
+        {{ ui.table_start([
+            {label: 'Started'}, {label: 'Quest', wrap: true}, {label: 'Node'}, {label: 'Phone'}, {label: 'State'},
+            {label: 'Points', align: 'right'}, {label: 'Completion received'}, {label: 'Actions'},
+        ]) }}
+        {% for e in enrollments %}
+            <tr>
+                <td data-order="{{ e.createdAt.timestamp }}"><a href="{{ path('admin_enrollment', {id: e.id}) }}">{{ e.createdAt|clock }}</a></td>
+                <td class="wrap">{{ e.quest ? e.quest.name : '—' }}</td>
+                <td><code>{{ e.device ? e.device.slug : '—' }}</code></td>
+                <td>{% if e.handset %}<a href="{{ path('admin_handset', {id: e.handset.id}) }}">{{ e.handset.displayName }}</a>{% else %}<span class="text-muted">not reported</span>{% endif %}</td>
+                <td>{{ m.state(e.status) }}{% if e.quarantined %} <span class="state state-bad">quarantined</span>{% endif %}</td>
+                <td class="num">{{ e.pointsAwarded is null ? '—' : e.pointsAwarded|number_format(1) }}</td>
+                <td>{{ e.completionReceivedAt|clock }}</td>
+                <td>
+                    <form method="post" action="{{ path('admin_enrollment_status', {id: e.id}) }}" class="run-state">
+                        <input type="hidden" name="_token" value="{{ run_token }}"><input type="hidden" name="return" value="person">
+                        <label class="visually-hidden" for="state-{{ e.id }}">New state</label>
+                        <select id="state-{{ e.id }}" name="status">
+                            {% for st in run_statuses %}
+                                <option value="{{ st }}"{{ st == e.status.value ? ' selected' : '' }}{{ st == 'completed' and e.completionReceivedAt is null and e.status.value != 'completed' ? ' disabled' : '' }}>{{ st|replace({'_': ' '}) }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="ui-btn">Set</button>
+                    </form>
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="8" class="wrap"><span class="ui-empty">No runs yet. A run appears when this person starts a quest in the app.</span></td></tr>
+        {% endfor %}
+        {{ ui.table_end() }}
+    </div>
+
+    <div class="ui-section" id="activity">
+        <h2>Activity</h2>
+        <p class="ui-note">What the server recorded, newest first. Sign-ins are not recorded.</p>
+        {% set rows = [] %}
+        {% for ev in activity %}
+            {% set rows = rows|merge([{href: ev.href ? path(ev.href.route, {id: ev.href.id}) : null, cells: [ui.clock(ev.at), ev.what|e, ev.detail|e]}]) %}
+        {% endfor %}
+        {{ ui.table(rows, [{label: 'When'}, {label: 'What'}, {label: 'Detail', wrap: true}], {empty: 'Nothing recorded yet.'}) }}
+    </div>
+
+    <div class="ui-section" id="recordings">
+        <h2>Recording sessions</h2>
+        <div class="ui-table-wrap">{{ m.session_rows(sessions, false) }}</div>
+    </div>
+
+    <div class="ui-section" id="phones">
+        <h2>Phones used</h2>
+        {% set rows = [] %}
+        {% for h in handsets %}
+            {% set rows = rows|merge([{href: path('admin_handset', {id: h.id}), cells: [h.displayName|e, h.platform|e, '<code>' ~ (h.machine ?? '—')|e ~ '</code>', (h.osVersion ?? '—')|e, '<code>' ~ (h.build ?? '—')|e ~ '</code>', h.enrollmentCount]}]) %}
+        {% endfor %}
+        {{ ui.table(rows, [{label: 'Phone'}, {label: 'Platform'}, {label: 'Machine'}, {label: 'Latest OS'}, {label: 'Latest build'}, {label: 'Runs (all users)', align: 'right'}], {empty: 'No run of theirs carried a phone descriptor.'}) }}
+    </div>
+
+    <div class="ui-section" id="access">
+        <h2>Access and account</h2>
+        {% if participant.deleted %}
+            <p class="ui-note">This account is anonymised. Its runs stay countable; there is nothing to sign in with.</p>
+        {% else %}
+            <form method="post" action="{{ path('admin_people_access', {id: participant.id}) }}" class="run-state">
+                <input type="hidden" name="_token" value="{{ token }}">
+                <label for="access-status">Sign-in</label>
+                <select id="access-status" name="status">
+                    {% for st in access_statuses %}<option value="{{ st }}"{{ st == participant.status.value ? ' selected' : '' }}>{{ {active: 'active (can sign in)', pending: 'pending (waiting for approval)', inactive: 'inactive (switched off)'}[st] }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="ui-btn">Set</button>
+            </form>
+            <p class="ui-note">The password is stored as a hash only. "New password + invitation" at the top sets a new one and shows it once. The participant can change it in the app (My account → Change password); nothing forces a change.</p>
+            {{ ui.kv([
+                {label: 'Account id', value: ui.id(participant.id)},
+                {label: 'Roles', value: participant.roles|join(', ')|e},
+                {label: 'Updated', value: participant.updatedAt|clock},
+            ]) }}
+            {% if participant.id != app.user.id %}
+                <p><a class="ui-btn ui-btn-danger" href="{{ anonymise_url }}" onclick="return confirm('Anonymise this account? Name, e-mail, password and roles are scrubbed. Runs and scans stay.')">Anonymise account</a></p>
+            {% endif %}
+        {% endif %}
+
+        {% if signup %}
+            <h3 class="ui-subhead">Beta signup</h3>
+            {{ ui.kv([
+                {label: 'Status', value: signup.status.value},
+                {label: 'Signed up', value: signup.createdAt|clock},
+                {label: 'Availability', value: signup.availability.value},
+                {label: 'Updates opt-in', value: signup.updatesOptIn ? 'yes' : 'no'},
+                {label: 'Source', value: signup.source ? signup.source|e : null},
+                {label: 'Invited', value: signup.invitedAt ? signup.invitedAt|clock ~ (signup.invitedBy ? ' by ' ~ signup.invitedBy.email|e : '') : null},
+            ]) }}
+            {% if signup.status.value != 'withdrawn' %}
+                <form method="post" action="{{ path('admin_people_onboarding_notes', {id: signup.id}) }}" class="signup-notes">
+                    <input type="hidden" name="_token" value="{{ signup_token }}"><input type="hidden" name="person" value="{{ participant.id }}">
+                    <label for="notes-{{ signup.id }}">Private operator note</label>
+                    <textarea id="notes-{{ signup.id }}" name="notes" rows="3">{{ signup.notes ?? '' }}</textarea>
+                    <button type="submit" class="ui-btn">Save note</button>
+                </form>
+            {% endif %}
+        {% endif %}
+    </div>
+{% endblock %}

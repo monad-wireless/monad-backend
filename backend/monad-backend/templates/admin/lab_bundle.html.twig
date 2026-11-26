@@ -1,0 +1,29 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block breadcrumb %}<a href="{{ path('admin_lab') }}">Lab</a> / Bundle{% endblock %}
+
+{% block content_title %}Lab bundle{% endblock %}
+
+{% block main %}
+    {{ include('admin/_lab_tabs.html.twig', {active: 'Bundle'}) }}
+
+    <p class="text-muted">
+        Exactly what <code>GET /api/lab/config</code> serves to the handsets. Read-only here: the bundle is
+        rendered by Ansible from inventory (<code>roles/monad_api</code>, <code>lab.json.j2</code>) and
+        bind-mounted read-only, so an edit on this page would be reverted by the next run — while appearing
+        to have worked.
+    </p>
+
+    {% for warning in warnings %}
+        <div class="alert alert-warning">{{ warning }}</div>
+    {% else %}
+        <div class="alert alert-success">Collector host, beacon count and access points all look sane.</div>
+    {% endfor %}
+
+    <div class="card">
+        <div class="card-header">config/lab/lab.json</div>
+        <div class="card-body">
+            <pre class="mb-0"><code>{{ json }}</code></pre>
+        </div>
+    </div>
+{% endblock %}

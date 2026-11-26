@@ -1,0 +1,17 @@
+{% extends 'join/_layout.html.twig' %}
+
+{# The confirmation, adapted from the retired Google Form's confirmation message. The same page
+   for a real signup, a duplicate and a honeypot hit, so nothing about known addresses leaks. #}
+
+{% block title %}Thanks, you are registered{% endblock %}
+
+{% block body %}
+    <h1>Thanks, you are registered.</h1>
+    <p>I create the accounts by hand, so give me a little time. You will get an email with your sign-in address and a password.</p>
+    <p>Meanwhile you can install the app: <a href="https://monad.dubec.dev/#app">monad.dubec.dev</a> has the Android download and the iPhone TestFlight link. Registering does not enrol you in a study; the app explains each task and the data it records before you start.</p>
+    <p>Questions or a change of plans? Write to <a href="mailto:jakub.dubec@stuba.sk">jakub.dubec@stuba.sk</a>.</p>
+    <p class="muted sig">Jakub Dubec, FIIT STU Bratislava</p>
+    <div class="note">
+        <p style="margin:0"><a href="{{ terms_url }}">Terms</a> · <a href="{{ privacy_url }}">Privacy policy</a></p>
+    </div>
+{% endblock %}

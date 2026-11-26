@@ -1,8 +1,0 @@
-api_platform:
-    title: 'Monad API'
-    description: 'Authentication and user management API for Monad application'
-    version: '1.0.0'
-    defaults:
-        stateless: true
-        cache_headers:
-            vary: ['Content-Type', 'Authorization', 'Origin']

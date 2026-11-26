@@ -158,7 +158,7 @@ readonly class StorageDecorator implements OpenApiFactoryInterface
                                         ],
                                         'url' => [
                                             'type' => 'string',
-                                            'example' => 'https://bucket.s3.region.amazonaws.com/uploads/...',
+                                            'example' => 'https://fsn1.your-objectstorage.com/monad-knowledge/uploads/...',
                                             'description' => 'URL of the uploaded file',
                                         ],
                                         'size' => [
@@ -268,7 +268,7 @@ readonly class StorageDecorator implements OpenApiFactoryInterface
                                     'properties' => [
                                         'uploadUrl' => [
                                             'type' => 'string',
-                                            'example' => 'https://bucket.s3.region.amazonaws.com/uploads/...?X-Amz-...',
+                                            'example' => 'https://fsn1.your-objectstorage.com/monad-knowledge/uploads/...?X-Amz-...',
                                             'description' => 'Pre-signed URL for uploading. Use HTTP PUT with the file content.',
                                         ],
                                         'objectKey' => [

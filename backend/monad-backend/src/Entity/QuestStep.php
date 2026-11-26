@@ -4,6 +4,7 @@ namespace App\Entity;
 
 use App\Enum\QuestStepType;
 use App\Repository\QuestStepRepository;
+use App\Validator\Constraints\ValidStepConfig;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\Uuid;
@@ -38,8 +39,15 @@ class QuestStep
     #[Assert\PositiveOrZero(message: 'Step order must be a positive number or zero')]
     private ?int $order = null;
 
+    /**
+     * Validated against the step type's schema (App\Quest\Schema) on the ENTITY, so the admin
+     * form, `lab_quest_write` and the API all refuse the same malformed config (IP-157). Before
+     * this the constraint sat only on the API DTO, and an `observe` step without `min_readings`
+     * could be saved from /admin and surface on a phone as a step that does nothing.
+     */
     #[ORM\Column(type: Types::JSON)]
     #[Assert\NotNull(message: 'Step configuration is required')]
+    #[ValidStepConfig]
     private array $config = [];
 
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]

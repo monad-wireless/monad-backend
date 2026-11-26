@@ -1,0 +1,2 @@
+{# A missing value is a dash, not a badge that says "Null". #}
+{% if not (ea().crud.areNullValuesHidden ?? false) %}<span class="state state-muted" title="No value">—</span>{% endif %}

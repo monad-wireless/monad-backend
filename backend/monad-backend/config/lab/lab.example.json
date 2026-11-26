@@ -1,0 +1,41 @@
+{
+  "version": 3,
+  "site": "fiit-ground-0",
+  "floor": "fiit-ground-0",
+
+  "collector": {
+    "host": "",
+    "udp_port": 9998,
+    "http_base": ""
+  },
+
+  "access_points": [],
+
+  "beacons": {
+    "uuid": "4d360944-644c-433c-801f-399385e2cfca",
+    "majors": [],
+    "zones": []
+  },
+
+  "advertise": {
+    "namespace_uuid": "6d6f6e61-6461-4076-b100-000000000000",
+    "interval_ms": 250,
+    "tx_power": "medium"
+  },
+
+  "traffic_profiles": [],
+
+  "clock_sync": {
+    "burst_size": 20,
+    "burst_spacing_ms": 50,
+    "resync_seconds": 600,
+    "timeout_ms": 1000
+  },
+
+  "telemetry": {
+    "endpoint": "https://otlp.monad.dubec.dev:4319",
+    "username": "handset",
+    "password": "",
+    "flush_seconds": 15
+  }
+}

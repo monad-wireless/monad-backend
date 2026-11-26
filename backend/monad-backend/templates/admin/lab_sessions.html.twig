@@ -1,0 +1,39 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block content_title %}Ground-truth sessions{% endblock %}
+
+{% block main %}
+    <p class="text-muted small">
+        A ground-truth session is whatever <code>lab_session_id</code> the handsets were told to stamp on their
+        check-in scans; it comes into existence when its first scan arrives, and there is no table behind it.
+        These are the <strong>people</strong> channel. The <em>recording</em> sessions under Runs are one phone's
+        uploaded artefacts, and a scan joins one only through <code>recording_session_id</code>.
+    </p>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-dense mb-0">
+                <thead>
+                    <tr>
+                        <th>Ground-truth session</th>
+                        <th class="num">Scans</th>
+                        <th class="num">Participants</th>
+                        <th>Last scan</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for session in sessions %}
+                        <tr>
+                            <td><a href="{{ path('admin_lab_session', {labSessionId: session.lab_session_id}) }}"><code>{{ session.lab_session_id }}</code></a></td>
+                            <td class="num">{{ session.scans }}</td>
+                            <td class="num">{{ session.participants }}</td>
+                            <td>{{ session.last_seen ? session.last_seen|clock : '—' }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="4" class="text-muted">No sessions yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

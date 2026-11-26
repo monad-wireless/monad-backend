@@ -1,0 +1,50 @@
+{
+  "description": "Legacy classification. Every headcount payload the app has written is classified by its schema string alone. v1 and v2 are partial views (what one person saw from one spot, views overlap, never summed). A missing on_air is unknown, never false. A missing or unknown schema is unknown, never a reading of either kind.",
+  "cases": [
+    {
+      "name": "v1-no-on-air",
+      "payload": {"schema": "monad-app/headcount-marker/v1", "count": 4, "reading": 1, "of_readings": 5, "prompt": "How many people can you see from where you stand?"},
+      "expected": {"scope": "partial_view", "schema": "monad-app/headcount-marker/v1", "on_air": null, "legacy": true}
+    },
+    {
+      "name": "v2-on-air-true",
+      "payload": {"schema": "monad-app/headcount-marker/v2", "count": 4, "reading": 2, "of_readings": 5, "prompt": "How many people can you see from where you stand?", "on_air": true},
+      "expected": {"scope": "partial_view", "schema": "monad-app/headcount-marker/v2", "on_air": true, "legacy": true}
+    },
+    {
+      "name": "v2-on-air-false",
+      "payload": {"schema": "monad-app/headcount-marker/v2", "count": 0, "reading": 3, "of_readings": 5, "prompt": "How many people can you see from where you stand?", "on_air": false},
+      "expected": {"scope": "partial_view", "schema": "monad-app/headcount-marker/v2", "on_air": false, "legacy": true}
+    },
+    {
+      "name": "v2-on-air-null",
+      "payload": {"schema": "monad-app/headcount-marker/v2", "count": 2, "reading": 1, "of_readings": 5, "prompt": "How many people can you see from where you stand?", "on_air": null},
+      "expected": {"scope": "partial_view", "schema": "monad-app/headcount-marker/v2", "on_air": null, "legacy": true}
+    },
+    {
+      "name": "v3-sweep-event",
+      "payload": {"schema": "monad-app/headcount-marker/v3", "event_type": "checkpoint", "count": 3, "on_air": true},
+      "expected": {"scope": "sweep", "schema": "monad-app/headcount-marker/v3", "on_air": true, "legacy": false}
+    },
+    {
+      "name": "no-schema",
+      "payload": {"count": 4, "reading": 1, "of_readings": 5, "prompt": "How many people can you see from where you stand?"},
+      "expected": {"scope": "unknown", "schema": null, "on_air": null, "legacy": false}
+    },
+    {
+      "name": "unknown-schema",
+      "payload": {"schema": "monad-app/headcount-marker/v9", "count": 4},
+      "expected": {"scope": "unknown", "schema": "monad-app/headcount-marker/v9", "on_air": null, "legacy": false}
+    },
+    {
+      "name": "on-air-string-is-not-a-fact",
+      "payload": {"schema": "monad-app/headcount-marker/v2", "count": 1, "reading": 1, "of_readings": 5, "prompt": "x", "on_air": "true"},
+      "expected": {"scope": "partial_view", "schema": "monad-app/headcount-marker/v2", "on_air": null, "legacy": true}
+    },
+    {
+      "name": "not-an-object",
+      "payload": null,
+      "expected": {"scope": "unknown", "schema": null, "on_air": null, "legacy": false}
+    }
+  ]
+}

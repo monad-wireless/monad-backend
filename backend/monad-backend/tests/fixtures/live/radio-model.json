@@ -1,0 +1,1870 @@
+{
+ "source": "lab_atlas.trilaterate on app:1/a5a2e4d3, 4 s windows every 37 s",
+ "p0_dbm": -62.11,
+ "exponent": 1.215,
+ "nodes": {
+  "monad01": [
+   9.681,
+   11.767
+  ],
+  "monad02": [
+   14.376,
+   6.267
+  ],
+  "monad03": [
+   18.377,
+   13.508
+  ],
+  "monad04": [
+   4.162815,
+   8.747957
+  ],
+  "monad05": [
+   8.558534,
+   17.634266
+  ],
+  "monad06": [
+   9.50725,
+   7.008644
+  ],
+  "monad07": [
+   3.030638,
+   22.329442
+  ],
+  "monad08": [
+   16.931,
+   9.357
+  ],
+  "monad10": [
+   3.182475,
+   5.206083
+  ]
+ },
+ "cases": [
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -67.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -72.5
+    }
+   ],
+   "position": [
+    11.178327,
+    8.59827
+   ],
+   "mismatch_at_10_10": 3.433269,
+   "walker": [
+    9.872,
+    6.164
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -71.5
+    },
+    {
+     "node": "monad02",
+     "rssi": -69.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -52.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -72.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -71.0
+    }
+   ],
+   "position": [
+    9.713858,
+    6.857286
+   ],
+   "mismatch_at_10_10": 6.136096,
+   "walker": [
+    9.733,
+    7.201
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -68.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -66.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -69.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -74.0
+    }
+   ],
+   "position": [
+    11.992469,
+    7.404869
+   ],
+   "mismatch_at_10_10": 3.764644,
+   "walker": [
+    10.674,
+    6.437
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -78.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -79.5
+    },
+    {
+     "node": "monad05",
+     "rssi": -79.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -72.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -73.0
+    }
+   ],
+   "position": [
+    13.273317,
+    11.860702
+   ],
+   "mismatch_at_10_10": 4.716047,
+   "walker": [
+    11.586,
+    1.771
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -49.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -69.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -81.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -69.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -73.0
+    }
+   ],
+   "position": [
+    14.133548,
+    6.190038
+   ],
+   "mismatch_at_10_10": 8.417857,
+   "walker": [
+    14.398,
+    6.241
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -60.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -76.5
+    },
+    {
+     "node": "monad05",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -70.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -68.5
+    },
+    {
+     "node": "monad10",
+     "rssi": -73.0
+    }
+   ],
+   "position": [
+    14.051583,
+    6.836353
+   ],
+   "mismatch_at_10_10": 5.674732,
+   "walker": [
+    14.045,
+    7.428
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -72.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -65.5
+    },
+    {
+     "node": "monad03",
+     "rssi": -72.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -67.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -69.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -72.0
+    }
+   ],
+   "position": [
+    12.617994,
+    7.276353
+   ],
+   "mismatch_at_10_10": 3.660539,
+   "walker": [
+    12.953,
+    8.933
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -62.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -67.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -76.5
+    },
+    {
+     "node": "monad08",
+     "rssi": -68.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -73.0
+    }
+   ],
+   "position": [
+    10.512017,
+    10.709536
+   ],
+   "mismatch_at_10_10": 2.255778,
+   "walker": [
+    10.771,
+    11.686
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -69.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -72.5
+    },
+    {
+     "node": "monad04",
+     "rssi": -76.5
+    },
+    {
+     "node": "monad05",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -72.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -56.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -74.0
+    }
+   ],
+   "position": [
+    16.753427,
+    9.087939
+   ],
+   "mismatch_at_10_10": 7.563481,
+   "walker": [
+    17.744,
+    9.224
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -75.5
+    },
+    {
+     "node": "monad02",
+     "rssi": -72.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -69.5
+    },
+    {
+     "node": "monad04",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -61.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -77.0
+    }
+   ],
+   "position": [
+    17.638975,
+    9.803544
+   ],
+   "mismatch_at_10_10": 6.218353,
+   "walker": [
+    17.091,
+    9.469
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -78.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -70.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -72.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -78.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -67.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -65.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -77.5
+    }
+   ],
+   "position": [
+    14.587872,
+    8.818805
+   ],
+   "mismatch_at_10_10": 5.778489,
+   "walker": [
+    18.871,
+    10.223
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -76.5
+    },
+    {
+     "node": "monad03",
+     "rssi": -69.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -80.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -78.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -76.0
+    }
+   ],
+   "position": [
+    22.212762,
+    14.982371
+   ],
+   "mismatch_at_10_10": 4.983644,
+   "walker": [
+    20.982,
+    17.256
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -68.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -77.5
+    },
+    {
+     "node": "monad05",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -75.0
+    }
+   ],
+   "position": [
+    15.81617,
+    14.608
+   ],
+   "mismatch_at_10_10": 4.230554,
+   "walker": [
+    17.873,
+    17.952
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -78.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -68.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -72.0
+    }
+   ],
+   "position": [
+    21.313079,
+    14.903648
+   ],
+   "mismatch_at_10_10": 6.296113,
+   "walker": [
+    18.253,
+    18.102
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -78.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -51.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -75.5
+    },
+    {
+     "node": "monad06",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -68.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -78.0
+    }
+   ],
+   "position": [
+    18.40617,
+    13.255057
+   ],
+   "mismatch_at_10_10": 9.863006,
+   "walker": [
+    18.389,
+    13.522
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -66.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -69.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -73.0
+    }
+   ],
+   "position": [
+    16.099955,
+    13.005362
+   ],
+   "mismatch_at_10_10": 5.600135,
+   "walker": [
+    15.17,
+    12.233
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -67.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -69.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -66.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -73.0
+    }
+   ],
+   "position": [
+    15.328831,
+    10.876987
+   ],
+   "mismatch_at_10_10": 4.713281,
+   "walker": [
+    14.233,
+    13.022
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -72.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -72.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -69.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -76.0
+    }
+   ],
+   "position": [
+    13.695652,
+    12.167103
+   ],
+   "mismatch_at_10_10": 3.659057,
+   "walker": [
+    11.7,
+    15.005
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -49.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -68.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -70.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -75.0
+    }
+   ],
+   "position": [
+    9.954554,
+    11.780215
+   ],
+   "mismatch_at_10_10": 5.794371,
+   "walker": [
+    9.671,
+    11.738
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -70.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -64.5
+    },
+    {
+     "node": "monad06",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -71.5
+    },
+    {
+     "node": "monad10",
+     "rssi": -71.0
+    }
+   ],
+   "position": [
+    9.294422,
+    15.470093
+   ],
+   "mismatch_at_10_10": 4.987737,
+   "walker": [
+    8.425,
+    18.911
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -78.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -56.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -72.5
+    },
+    {
+     "node": "monad10",
+     "rssi": -74.0
+    }
+   ],
+   "position": [
+    8.819089,
+    17.450193
+   ],
+   "mismatch_at_10_10": 7.46172,
+   "walker": [
+    8.25,
+    17.638
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -51.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -74.0
+    }
+   ],
+   "position": [
+    8.750169,
+    17.460237
+   ],
+   "mismatch_at_10_10": 8.376173,
+   "walker": [
+    7.643,
+    18.34
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -73.5
+    },
+    {
+     "node": "monad02",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -70.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -78.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -78.0
+    }
+   ],
+   "position": [
+    13.666075,
+    18.215506
+   ],
+   "mismatch_at_10_10": 3.489862,
+   "walker": [
+    5.816,
+    15.487
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -72.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -72.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -69.5
+    },
+    {
+     "node": "monad06",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -72.0
+    }
+   ],
+   "position": [
+    6.662914,
+    13.075115
+   ],
+   "mismatch_at_10_10": 2.85012,
+   "walker": [
+    6.001,
+    12.121
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -68.5
+    },
+    {
+     "node": "monad02",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -68.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -66.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -67.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -71.0
+    }
+   ],
+   "position": [
+    10.234159,
+    9.023955
+   ],
+   "mismatch_at_10_10": 2.50185,
+   "walker": [
+    7.596,
+    9.967
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -67.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -53.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -68.0
+    }
+   ],
+   "position": [
+    4.412164,
+    8.844053
+   ],
+   "mismatch_at_10_10": 7.411381,
+   "walker": [
+    4.603,
+    8.578
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -67.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -69.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -70.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -70.0
+    }
+   ],
+   "position": [
+    6.692235,
+    10.63782
+   ],
+   "mismatch_at_10_10": 3.174677,
+   "walker": [
+    6.315,
+    12.441
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -81.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -74.0
+    }
+   ],
+   "position": [
+    5.197213,
+    15.725142
+   ],
+   "mismatch_at_10_10": 3.643135,
+   "walker": [
+    1.351,
+    19.384
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -72.5
+    },
+    {
+     "node": "monad05",
+     "rssi": -78.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -73.5
+    },
+    {
+     "node": "monad10",
+     "rssi": -74.0
+    }
+   ],
+   "position": [
+    2.615877,
+    14.323648
+   ],
+   "mismatch_at_10_10": 3.736167,
+   "walker": [
+    0.244,
+    14.162
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -72.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -69.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -68.0
+    }
+   ],
+   "position": [
+    6.542299,
+    11.513048
+   ],
+   "mismatch_at_10_10": 3.328184,
+   "walker": [
+    2.919,
+    11.486
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -59.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -73.5
+    },
+    {
+     "node": "monad10",
+     "rssi": -70.0
+    }
+   ],
+   "position": [
+    4.737736,
+    8.794019
+   ],
+   "mismatch_at_10_10": 5.105328,
+   "walker": [
+    2.962,
+    8.391
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -78.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -79.5
+    },
+    {
+     "node": "monad04",
+     "rssi": -66.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -61.0
+    }
+   ],
+   "position": [
+    2.988246,
+    6.076325
+   ],
+   "mismatch_at_10_10": 7.224615,
+   "walker": [
+    0.01,
+    6.137
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -73.5
+    },
+    {
+     "node": "monad02",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -68.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -78.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -41.0
+    }
+   ],
+   "position": [
+    3.157978,
+    5.456322
+   ],
+   "mismatch_at_10_10": 12.934164,
+   "walker": [
+    2.622,
+    5.321
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -65.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -72.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -71.0
+    }
+   ],
+   "position": [
+    10.639508,
+    7.853713
+   ],
+   "mismatch_at_10_10": 2.554216,
+   "walker": [
+    8.328,
+    5.072
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -72.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -58.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -72.0
+    }
+   ],
+   "position": [
+    8.768946,
+    17.19683
+   ],
+   "mismatch_at_10_10": 6.367798,
+   "walker": [
+    10.997,
+    17.484
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -78.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -66.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -78.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -75.0
+    }
+   ],
+   "position": [
+    7.188989,
+    19.335721
+   ],
+   "mismatch_at_10_10": 6.595981,
+   "walker": [
+    11.554,
+    18.96
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -75.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -78.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -67.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -75.0
+    }
+   ],
+   "position": [
+    10.413416,
+    19.861697
+   ],
+   "mismatch_at_10_10": 6.148844,
+   "walker": [
+    11.752,
+    19.157
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -78.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -82.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -70.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -70.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -77.0
+    }
+   ],
+   "position": [
+    7.560099,
+    22.648623
+   ],
+   "mismatch_at_10_10": 6.989846,
+   "walker": [
+    10.839,
+    18.999
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -73.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -68.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -75.0
+    }
+   ],
+   "position": [
+    1.844773,
+    19.384743
+   ],
+   "mismatch_at_10_10": 5.589175,
+   "walker": [
+    10.192,
+    21.076
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad05",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -63.0
+    }
+   ],
+   "position": [
+    1.528645,
+    24.006515
+   ],
+   "mismatch_at_10_10": 10.405174,
+   "walker": [
+    9.034,
+    22.655
+   ]
+  },
+  {
+   "medians": [
+    {
+     "node": "monad01",
+     "rssi": -77.0
+    },
+    {
+     "node": "monad02",
+     "rssi": -79.0
+    },
+    {
+     "node": "monad03",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad04",
+     "rssi": -78.5
+    },
+    {
+     "node": "monad05",
+     "rssi": -70.0
+    },
+    {
+     "node": "monad06",
+     "rssi": -76.0
+    },
+    {
+     "node": "monad07",
+     "rssi": -71.0
+    },
+    {
+     "node": "monad08",
+     "rssi": -74.0
+    },
+    {
+     "node": "monad10",
+     "rssi": -78.0
+    }
+   ],
+   "position": [
+    9.129546,
+    22.177081
+   ],
+   "mismatch_at_10_10": 5.153606,
+   "walker": [
+    8.173,
+    19.701
+   ]
+  }
+ ]
+}

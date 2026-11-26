@@ -1,0 +1,38 @@
+# IP-157 — one asynchronous transport, on Doctrine, for the push sends.
+#
+# Why Doctrine and not a broker: the deployment already has exactly one PostgreSQL cluster and
+# nothing else that queues; a table in the same database is one more thing to back up (already
+# done) and zero more services. Why a transport at all: a notification to two hundred recipients
+# is two hundred FCM calls, and the desk's "send" button must return at once. Sending runs in the
+# `worker` service (`messenger:consume scheduler_default async`, in both compose files).
+#
+# Routing: messages implementing App\Message\AsyncMessage go to `async`. The key is the INTERFACE
+# rather than the concrete class because Symfony refuses a routing key naming a class that does
+# not exist yet, and Phase 1 shipped this file before the message. Phase 4's concrete message is
+# App\Message\SendNotificationPush, handled by App\MessageHandler\SendNotificationPushHandler.
+framework:
+    messenger:
+        failure_transport: failed
+
+        transports:
+            async:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    # The transport table is created on first use in dev; production runs
+                    # `messenger:setup-transports` from the entrypoint when Phase 4 lands the worker.
+                    auto_setup: true
+                retry_strategy:
+                    max_retries: 3
+                    multiplier: 2
+            failed: 'doctrine://default?queue_name=failed'
+
+        routing:
+            App\Message\AsyncMessage: async
+
+when@test:
+    framework:
+        messenger:
+            transports:
+                # Both in memory in tests, so no table and no broker is touched.
+                async: 'in-memory://'
+                failed: 'in-memory://'

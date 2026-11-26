@@ -1,0 +1,26 @@
+{
+  "description": "Schema-valid but the digest does not match the canonical body: a snapshot whose prose changed after the digest was minted. Schema validation passes; the protocol digest check must fail.",
+  "expect_problem": "protocol_sha256",
+  "schema_valid": true,
+  "config": {
+    "schema": "monad-quest/observe/v2",
+    "mode": "room_sweep_cumulative",
+    "description": "Fixture only. Identifiers are synthetic and name no real room. Edited after the digest was minted.",
+    "prompt": "People counted so far",
+    "protocol_id": "fixture-room-sweep",
+    "protocol_sha256": "b33e25d256344f01b2991c38afda5dc1592ba801a6cb6e17fac120f3ebc1e24a",
+    "rooms": [
+      {
+        "room_id": "fixture-room-a",
+        "floor_id": "test-lab-synth-floor-0",
+        "label": "Fixture room A",
+        "geometry_version": "g1",
+        "coverage_version": "c1",
+        "coverage_instructions": "Walk the fixture loop once, clockwise, and count each other person once."
+      }
+    ],
+    "checkpoints": {"min_checkpoints": 2, "required_for_complete": false},
+    "observer_convention": "exclude_self",
+    "max_count": null
+  }
+}

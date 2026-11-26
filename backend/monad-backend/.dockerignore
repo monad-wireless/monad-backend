@@ -1,0 +1,30 @@
+# The build context is this directory as it sits on disk, not as git sees it. Without this file a
+# local `docker build` copied gitignored state into the image through `COPY . .`: the developer's
+# JWT keypair, the rig's lab.json (an AP passphrase and a private address), vendor/ and var/.
+# Everything below is either a secret, host state, or rebuilt inside the image.
+
+# Secrets and host-specific configuration. The Dockerfile writes its own minimal .env; the JWT
+# keypair is generated into a volume at first boot; lab.json is bind-mounted by Ansible.
+.env
+.env.local
+.env.local.php
+.env.*.local
+.env.test
+config/jwt/*.pem
+config/lab/lab.json
+config/secrets/prod/prod.decrypt.private.php
+
+# Rebuilt in the image: composer install fills vendor/, the entrypoint installs bundles and warms var/.
+vendor/
+var/
+public/bundles/
+
+# Development and test only. composer dump-autoload runs --no-dev, so tests/ is never autoloaded.
+tests/
+phpunit.xml
+phpunit.dist.xml
+.phpunit.cache/
+docker-compose.yml
+.editorconfig
+.gitignore
+.dockerignore

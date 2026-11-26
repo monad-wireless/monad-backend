@@ -1,0 +1,43 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{% import 'admin/_ui.html.twig' as ui %}
+
+{#
+  SETTINGS (IP-157 Phase 8): who can open this interface, and the facts that change how it reads.
+#}
+
+{% block content_title %}Settings{% endblock %}
+
+{% block main %}
+    <div class="ui-section">
+        <h2>Operator accounts</h2>
+        {% set rows = [] %}
+        {% for row in operators %}
+            {% set rows = rows|merge([{
+                href: row.edit_url,
+                cells: [
+                    ui.identity(row.user.name, row.user.email),
+                    row.user.status|state_word,
+                    ui.clock(row.user.createdAt),
+                    '<a href="' ~ row.edit_url ~ '">Edit</a>',
+                ]
+            }]) %}
+        {% endfor %}
+        {{ ui.table(rows, [
+            {label: 'Operator', wrap: true},
+            {label: 'Status'},
+            {label: 'Created'},
+            {label: '', align: 'right'}
+        ], {empty: 'No operator account. Nobody could have opened this page, so this is a bug rather than a state.'}) }}
+        <p class="ui-note">Operators can access this console. Open an account to update its details.</p>
+    </div>
+
+    <div class="ui-section">
+        <h2>This interface</h2>
+        {{ ui.kv({
+            'Time zone': '<code>' ~ timezone|e ~ '</code>',
+            'Clock format': '24-hour local time with the time zone shown beside each timestamp.',
+            'Rows per list': '25 by default in interactive tables; 50 in full registers.',
+            'API documentation': '<a href="/api/doc" target="_blank" rel="noopener">/api/doc</a>',
+        }) }}
+    </div>
+{% endblock %}
