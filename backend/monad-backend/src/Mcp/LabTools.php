@@ -1251,4 +1251,191 @@ class LabTools
             'count' => count($rows),
         ];
     }
+
+    /**
+     * The live runs (one per step completion of a `live` step), newest first.
+     *
+     * @return array<string, mixed>
+     */
+    #[McpTool(
+        name: 'lab_live_runs',
+        description: 'Live-step runs (quest_live_runs), newest first: run_id, engine, quest, enrollment_id, '
+            . 'the recording sessions of that enrollment, created/updated (UTC), done, phase and event counts '
+            . 'per origin. Filter by engine (e.g. radio_hunt), quest name and `since` (YYYY-MM-DD, '
+            . 'Europe/Bratislava, on created_at). Read the timeline with lab_live_events. Quarantined '
+            . 'enrollments are left out unless include_quarantined is true.',
+    )]
+    public function liveRuns(
+        ?string $engine = null,
+        ?string $quest = null,
+        ?string $since = null,
+        int $limit = 100,
+        bool $include_quarantined = false,
+    ): array {
+        $where = [];
+        $params = ['n' => max(1, min($limit, 500))];
+        if ($engine !== null && $engine !== '') {
+            $where[] = 'r.engine = :engine';
+            $params['engine'] = $engine;
+        }
+        if ($quest !== null && $quest !== '') {
+            $where[] = 'q.name = :quest';
+            $params['quest'] = $quest;
+        }
+        if ($since !== null && $since !== '') {
+            $day = \DateTimeImmutable::createFromFormat('!Y-m-d', $since, new \DateTimeZone('Europe/Bratislava'));
+            if ($day === false) {
+                return ['error' => sprintf('since must be YYYY-MM-DD, got "%s".', $since)];
+            }
+            $where[] = 'r.created_at >= :since';
+            $params['since'] = $day->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:sP');
+        }
+        if (!$include_quarantined) {
+            $where[] = 'e.quarantined_at IS NULL';
+        }
+        $sql = <<<'SQL'
+            SELECT r.id, r.engine, r.done, r.state->>'phase' AS phase, q.name AS quest, e.id AS enrollment_id,
+                   to_char(r.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+                   to_char(r.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS updated_at,
+                   (SELECT COUNT(*) FROM quest_live_events v WHERE v.run_id = r.id AND v.origin = 'phone') AS phone_events,
+                   (SELECT COUNT(*) FROM quest_live_events v WHERE v.run_id = r.id AND v.origin = 'engine') AS engine_events,
+                   (SELECT COALESCE(json_agg(s.id ORDER BY s.first_artefact_at), '[]') FROM lab_sessions s
+                     WHERE s.enrollment_id = e.id) AS recordings
+            FROM quest_live_runs r
+            JOIN quest_step_completions c ON c.id = r.step_completion_id
+            JOIN quest_enrollments e ON e.id = c.enrollment_id
+            JOIN quests q ON q.id = e.quest_id
+            SQL;
+        $rows = $this->entityManager->getConnection()->fetchAllAssociative(
+            $sql . ($where ? ' WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY r.created_at DESC LIMIT :n',
+            $params,
+            ['n' => \Doctrine\DBAL\ParameterType::INTEGER],
+        );
+
+        return [
+            'runs' => array_map(static fn (array $r): array => [
+                'run_id' => $r['id'],
+                'engine' => $r['engine'],
+                'quest' => $r['quest'],
+                'enrollment_id' => $r['enrollment_id'],
+                'recording_session_ids' => json_decode((string) $r['recordings'], true),
+                'created_at' => $r['created_at'],
+                'updated_at' => $r['updated_at'],
+                'done' => (bool) $r['done'],
+                'phase' => $r['phase'],
+                'phone_events' => (int) $r['phone_events'],
+                'engine_events' => (int) $r['engine_events'],
+            ], $rows),
+            'count' => count($rows),
+        ];
+    }
+
+    /**
+     * The append-only timeline of one live run: what the phone sent and what the engine decided.
+     *
+     * @return array<string, mixed>
+     */
+    #[McpTool(
+        name: 'lab_live_events',
+        description: 'Timeline of one live run (quest_live_events), oldest first. Name the run by run_id, or by '
+            . 'enrollment_id or recording_session_id (every live run of that enrollment). Each event: origin '
+            . '(phone|engine), kind, payload, client_wall_ms (phone clock, phone events only), at (server '
+            . 'receipt, UTC) and t (unix seconds of at). radio_hunt engine kinds: assigned, hint (every 2 s: '
+            . 'nodes, measure, closeness, in_zone, trend, position [x, y] in floor metres), scan_found, '
+            . 'scan_wrong (a known position), scan_unknown, skipped, finished. `kinds` is a comma list that '
+            . 'keeps only those kinds; `exclude_kinds` drops kinds (e.g. answer, when count answers must stay '
+            . 'unread). include_state adds the run\'s final engine state, which can hold count answers.',
+    )]
+    public function liveEvents(
+        ?string $run_id = null,
+        ?string $enrollment_id = null,
+        ?string $recording_session_id = null,
+        ?string $kinds = null,
+        ?string $exclude_kinds = null,
+        int $limit = 5000,
+        bool $include_state = false,
+    ): array {
+        $connection = $this->entityManager->getConnection();
+        $named = array_filter(['run_id' => $run_id, 'enrollment_id' => $enrollment_id, 'recording_session_id' => $recording_session_id]);
+        if (count($named) !== 1) {
+            return ['error' => 'Name exactly one of run_id, enrollment_id, recording_session_id.'];
+        }
+        foreach ($named as $field => $value) {
+            if ($field !== 'recording_session_id' && !Uuid::isValid((string) $value)) {
+                return ['error' => sprintf('%s must be a UUID, got "%s".', $field, $value)];
+            }
+        }
+        if ($recording_session_id !== null) {
+            $enrollment_id = $connection->fetchOne(
+                'SELECT enrollment_id FROM lab_sessions WHERE id = :id',
+                ['id' => \App\Service\LabSessionRegister::sanitize($recording_session_id)],
+            ) ?: null;
+            if ($enrollment_id === null) {
+                return ['error' => sprintf('No enrollment is recorded for recording session "%s".', $recording_session_id)];
+            }
+        }
+        $runs = $connection->fetchAllAssociative(
+            'SELECT r.id, r.engine, r.done, r.state, c.enrollment_id FROM quest_live_runs r'
+            . ' JOIN quest_step_completions c ON c.id = r.step_completion_id'
+            . ($run_id !== null ? ' WHERE r.id = :id' : ' WHERE c.enrollment_id = :id')
+            . ' ORDER BY r.created_at',
+            ['id' => $run_id ?? $enrollment_id],
+        );
+        $split = static fn (?string $list): array => array_values(array_filter(array_map('trim', explode(',', (string) $list))));
+        $keep = $split($kinds);
+        $drop = $split($exclude_kinds);
+        $cap = max(1, min($limit, 20000));
+
+        $out = [];
+        foreach ($runs as $run) {
+            $where = ['run_id = :run'];
+            $params = ['run' => $run['id'], 'n' => $cap];
+            $types = ['n' => \Doctrine\DBAL\ParameterType::INTEGER];
+            if ($keep !== []) {
+                $where[] = 'kind IN (:keep)';
+                $params['keep'] = $keep;
+                $types['keep'] = \Doctrine\DBAL\ArrayParameterType::STRING;
+            }
+            if ($drop !== []) {
+                $where[] = 'kind NOT IN (:drop)';
+                $params['drop'] = $drop;
+                $types['drop'] = \Doctrine\DBAL\ArrayParameterType::STRING;
+            }
+            $total = (int) $connection->fetchOne(
+                'SELECT COUNT(*) FROM quest_live_events WHERE ' . implode(' AND ', $where),
+                array_diff_key($params, ['n' => true]),
+                array_diff_key($types, ['n' => true]),
+            );
+            $events = $connection->fetchAllAssociative(
+                "SELECT origin, kind, payload, client_wall_ms,"
+                . " to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS at,"
+                . ' EXTRACT(EPOCH FROM at)::float8 AS t'
+                . ' FROM quest_live_events WHERE ' . implode(' AND ', $where) . ' ORDER BY id LIMIT :n',
+                $params,
+                $types,
+            );
+            $entry = [
+                'run_id' => $run['id'],
+                'engine' => $run['engine'],
+                'enrollment_id' => $run['enrollment_id'],
+                'done' => (bool) $run['done'],
+                'events_matching' => $total,
+                'truncated' => $total > count($events),
+                'events' => array_map(static fn (array $e): array => [
+                    'origin' => $e['origin'],
+                    'kind' => $e['kind'],
+                    'payload' => json_decode((string) $e['payload'], true),
+                    'client_wall_ms' => $e['client_wall_ms'] === null ? null : (int) $e['client_wall_ms'],
+                    'at' => $e['at'],
+                    't' => (float) $e['t'],
+                ], $events),
+            ];
+            if ($include_state) {
+                $entry['state'] = json_decode((string) $run['state'], true);
+            }
+            $out[] = $entry;
+        }
+
+        return ['runs' => $out, 'count' => count($out)];
+    }
 }

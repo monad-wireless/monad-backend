@@ -75,6 +75,11 @@ server class and no app release. A new widget needs a new capability token.
 - **Capability `quest.live.v1` is strict**, as `observe.room_sweep.v1` is: withheld from the listing
   and refused at start when the handset declares nothing, because an older build draws the step as
   an instruction card.
+- **Reading a run afterwards (2026-11-26):** MCP `lab_live_runs` lists runs (engine, quest, recordings,
+  event counts) and `lab_live_events` returns one run's timeline by run, enrollment or recording id,
+  with `kinds` / `exclude_kinds` filters. The radio hunt's `hint` rows are the only continuous position
+  trace of a player (the quest runs with tracking off, `live_sightings` lives 900 s). The final state is
+  returned only with `include_state`, because it holds the count answers.
 - Quests without a live step do not touch any of this.
 
 ## The recording-session register (IP-149)
